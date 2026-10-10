@@ -252,16 +252,25 @@ export function Fields({ route }: ViewProps) {
     }
     api.redraw()
   }, [world])
+  // fly to what is asked for or opened; and, when following, to each page the reader moves to
+  // by a link (the reader's own route, #/read/<path>, with the map behind it)
+  const readPath = route.view === 'read' ? route.path : undefined
+  const follow = useRef(prefs.follow)
+  follow.current = prefs.follow
   useEffect(() => {
-    const target = route.params.focus ?? route.params.open
+    const target = route.params.focus ?? route.params.open ?? (follow.current ? readPath : undefined)
     if (!world || !target) return
     const index = atlas ? atlas.index : world.index
     const at = index.get(target) ?? index.get(target.split('/').slice(0, -1).join('/'))
-    if (at) {
-      const s = api.size.current
-      api.flyTo({ x: at.x, y: at.y, k: Math.min(20, Math.max(1.2, (Math.min(s.w, s.h) * 0.12) / at.r)) })
-    }
-  }, [world, route.params.focus, route.params.open])
+    if (!at) return
+    const s = api.size.current
+    const k = Math.min(20, Math.max(1.2, (Math.min(s.w, s.h) * 0.12) / at.r))
+    // set the place in the middle of the map the reader leaves uncovered, not behind the folio
+    const folio = document.querySelector('.folio')?.getBoundingClientRect()
+    const canvas = ref.current?.getBoundingClientRect()
+    const clearW = folio && canvas && folio.left > canvas.left + 120 ? folio.left - canvas.left : s.w
+    api.flyTo({ x: at.x + (s.w - clearW) / 2 / k, y: at.y, k })
+  }, [world, atlas, route.params.focus, route.params.open, readPath])   // and again once the map's own places arrive
   useEffect(() => api.redraw(), [seeds, active, selected, discovered, prefs, atlas])
 
   // keyboard: arrows or WASD wander, +/- zoom, Enter reads a plot's door, Escape lets go

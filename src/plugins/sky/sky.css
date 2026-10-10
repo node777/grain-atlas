@@ -11,10 +11,10 @@
 /* the instrument's walls: drawn per tilt, flat behind the tilted layers */
 .sky-edge { position: absolute; display: none; pointer-events: none; }
 .sky-dial, .sky-time { user-select: none; }
-.sky-dial, .sky-time, .sky-selected { background: rgba(27, 23, 19, 0.84); border-color: #3a3027; backdrop-filter: blur(4px); color: #e9dcc0; }
+.sky-dial, .sky-time, .sky-selected { --gold-ink: var(--gold); background: rgba(27, 23, 19, 0.84); border-color: #3a3027; backdrop-filter: blur(4px); color: #e9dcc0; }
 .sky-dial .faint, .sky-time .faint, .sky-selected .faint { color: #8f816b; }
 .sky-dial .chip { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; }
-.sky-dial .chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold); }
+.sky-dial .chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold-ink); }
 .sky-dial select, .sky-dial input, .sky-time select, .sky-time input { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; color-scheme: dark; }
 .sky-selected { color: #e9dcc0; }
 .sky-selected .muted { color: #b4a892; }
@@ -47,17 +47,17 @@
 .si-cell { border: 1px solid var(--rule); padding: 3px 5px; position: relative; display: flex; flex-direction: column; font-size: 12px; }
 .si-cell.asc { background: color-mix(in srgb, var(--brass) 14%, transparent); }
 .si-sign { font-family: var(--sans); font-size: 10.5px; color: var(--ink-3); }
-.si-asc { position: absolute; right: 4px; top: 2px; font-family: var(--sans); font-size: 10px; color: var(--gold); }
+.si-asc { position: absolute; right: 4px; top: 2px; font-family: var(--sans); font-size: 10px; color: var(--gold-ink); }
 .si-bodies { font-family: var(--sans); font-weight: 600; font-size: 13px; margin-top: auto; color: var(--ink); }
 .si-centre { display: grid; place-content: center; text-align: center; padding: 6px; }
 .dasha-list { padding-left: 0; list-style: none; margin: 8px 0; }
 .dasha-list li { display: flex; flex-wrap: wrap; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--rule); }
-.dasha-list li.on > span:first-child { color: var(--gold); font-weight: 600; }
+.dasha-list li.on > span:first-child { color: var(--gold-ink); font-weight: 600; }
 .dasha-sub { width: 100%; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--ink-2); padding: 4px 0 2px 14px; }
-.dasha-sub .on { color: var(--gold); }
+.dasha-sub .on { color: var(--gold-ink); }
 .kin-row { display: flex; justify-content: space-between; gap: 8px; }
 .kin-row a { text-decoration: none; color: var(--ink); }
-.kin-row a:hover { color: var(--gold); }
+.kin-row a:hover { color: var(--gold-ink); }
 @media (max-width: 900px) {
   .sky-panel { top: auto; height: 46%; width: 100%; border-width: 1px 0 0 0; }
   .sky-panel.folded { height: auto; }

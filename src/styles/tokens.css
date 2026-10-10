@@ -38,6 +38,8 @@
   --brass-dim: #9a6f22;
   --gold: #d9b45a;
   --gold-pale: #f4e9cf;
+  /* gold for text: the gold itself on Hearth, a deeper gold on Stone (4.5:1 there) */
+  --gold-ink: #d9b45a;
 
   /* the five element rows (aether, air, fire, water, earth) as accents */
   --el-aether: #b08aab;
@@ -85,6 +87,7 @@
   --thread: 85, 65, 30;
   --thread-a: 0.055;
 
+  --gold-ink: #76560f;
   --madder: #9a4a3a;
   --annatto: #b5652a;
   --weld: #a68a1f;

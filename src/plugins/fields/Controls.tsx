@@ -109,6 +109,7 @@ export function FieldsControls({ C, stone }: { C: Record<string, string>; stone:
             <span>Names</span>
             <Seg label="Names" value={p.names} options={NAMES} onChange={(names) => set({ names })} />
           </div>
+          <Toggle label="Follow links" hint="Following a link from one page to another moves the map to where that page lies" on={p.follow} set={(follow) => set({ follow })} />
           <Toggle label="Mist over unwalked rooms" hint="Rooms you have not read in lie under a warm mist" on={p.mist} set={(mist) => set({ mist })} />
           <Toggle label="Relief" hint="Map view: mountains where folders run deep, hills and woods between" on={p.relief} disabled={!map} set={(relief) => set({ relief })} />
           <Toggle label="Rose and rhumb lines" hint="Map view: the compass rose, its wind lines and the title cartouche" on={p.sea} disabled={!map} set={(sea) => set({ sea })} />

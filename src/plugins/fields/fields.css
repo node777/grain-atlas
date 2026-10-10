@@ -16,15 +16,15 @@
 .fields-journey ol { margin: 8px 0; padding-left: 22px; font-size: 14.5px; }
 .fields-journey li { margin: 4px 0; }
 .fields-journey li a { color: var(--ink); text-decoration: none; }
-.fields-journey li.done a { color: var(--gold); }
-.fields-journey li.done::marker { color: var(--gold); }
+.fields-journey li.done a { color: var(--gold-ink); }
+.fields-journey li.done::marker { color: var(--gold-ink); }
 
 .fields-legend {
   position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; font-size: 12px; pointer-events: none;
   display: flex; align-items: baseline; gap: 14px; white-space: nowrap;
   padding: 3px 12px; border-radius: var(--r2); background: color-mix(in srgb, var(--page) 78%, transparent);
 }
-.fields-found { display: inline-flex; align-items: center; gap: 6px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.fields-found { display: inline-flex; align-items: center; gap: 6px; color: var(--gold-ink); font-variant-numeric: tabular-nums; }
 .fields-found svg { fill: currentColor; transform: rotate(18deg); }
 :root[data-mode='stone'] .fields-found { color: var(--brass-dim); }
 @media (max-width: 720px) {
@@ -43,7 +43,7 @@
 }
 .fields-seg button svg { fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; }
 .fields-seg button:hover { color: var(--ink); }
-.fields-seg button[aria-checked='true'] { background: var(--surface-2); border-color: var(--brass-dim); color: var(--gold); }
+.fields-seg button[aria-checked='true'] { background: var(--surface-2); border-color: var(--brass-dim); color: var(--gold-ink); }
 :root[data-mode='stone'] .fields-seg button[aria-checked='true'] { color: var(--brass-dim); background: var(--page); }
 .fields-seg button:focus-visible, .fields-ctl-more:focus-visible, .fields-toggle button:focus-visible { outline: 1.5px solid var(--brass-dim); outline-offset: 1px; }
 .fields-ctl-more {
@@ -51,7 +51,7 @@
   border: 1px solid transparent; background: none; color: var(--ink-2);
 }
 .fields-ctl-more svg { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; }
-.fields-ctl-more:hover, .fields-ctl-more[aria-expanded='true'] { color: var(--gold); border-color: var(--rule); }
+.fields-ctl-more:hover, .fields-ctl-more[aria-expanded='true'] { color: var(--gold-ink); border-color: var(--rule); }
 :root[data-mode='stone'] .fields-ctl-more:hover, :root[data-mode='stone'] .fields-ctl-more[aria-expanded='true'] { color: var(--brass-dim); }
 .fields-ctl-panel {
   width: min(300px, calc(100vw - 32px)); padding: 10px 12px; display: grid; gap: 9px; font-size: 13px; color: var(--ink-surface);

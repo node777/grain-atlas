@@ -101,7 +101,7 @@ function DirPage({ entry }: { entry: Entry }) {
           const e = r.get(c)!
           return (
             <div key={c} style={{ breakInside: 'avoid', padding: '2px 0' }}>
-              <a href={hrefFor('read', c)} style={{ color: e.kind === 'dir' ? 'var(--gold)' : 'var(--ink-2)', textDecoration: 'none' }}>
+              <a href={hrefFor('read', c)} style={{ color: e.kind === 'dir' ? 'var(--gold-ink)' : 'var(--ink-2)', textDecoration: 'none' }}>
                 {e.name}{e.kind === 'dir' ? '/' : ''}
               </a>
               {e.kind === 'dir' && <span className="faint"> {e.files}</span>}

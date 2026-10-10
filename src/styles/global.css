@@ -58,7 +58,7 @@ button { font: inherit; color: inherit; }
   font-family: var(--sans); font-size: 13px; color: var(--ink-surface); cursor: pointer; white-space: nowrap; text-decoration: none;
 }
 .chip:hover { border-color: var(--brass-dim); }
-.chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold); }
+.chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold-ink); }
 .icon-btn { background: none; border: 1px solid transparent; border-radius: var(--r2); padding: 5px 7px; cursor: pointer; color: var(--ink-2); }
 .icon-btn:hover { border-color: var(--rule); color: var(--ink); }
 
@@ -74,13 +74,13 @@ button { font: inherit; color: inherit; }
 .compass:not(.open) .label, .compass:not(.open) .point { opacity: 0; }
 .compass .label, .compass .point { transition: opacity var(--respond) var(--ease); }
 .compass .label { font-family: var(--sans); font-size: 12.5px; fill: var(--ink-2); letter-spacing: .02em; }
-.compass a:hover .label, .compass a[aria-current='page'] .label { fill: var(--gold); }
+.compass a:hover .label, .compass a[aria-current='page'] .label { fill: var(--gold-ink); }
 .compass a .point { fill: var(--surface); stroke: var(--brass-dim); }
 .compass a:hover .point, .compass a[aria-current='page'] .point { fill: var(--brass); }
 .compass-here {
   position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); z-index: 1;
   background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r1); padding: 0 6px;
-  font-size: 11px; color: var(--gold); cursor: pointer; white-space: nowrap;
+  font-size: 11px; color: var(--gold-ink); cursor: pointer; white-space: nowrap;
 }
 .compass.open .compass-here { opacity: 0; pointer-events: none; }
 
@@ -102,7 +102,7 @@ button { font: inherit; color: inherit; }
 
 .crumbs { display: flex; flex-wrap: wrap; gap: 2px 4px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); min-width: 0; }
 .crumbs a { color: var(--ink-2); text-decoration: none; }
-.crumbs a:hover { color: var(--gold); }
+.crumbs a:hover { color: var(--gold-ink); }
 
 /* ---------- the stamp ---------- */
 .stamp {
@@ -114,7 +114,7 @@ button { font: inherit; color: inherit; }
 .stamp .moon { grid-row: span 2; }
 .stamp .vedic { font-family: var(--serif); font-style: italic; color: var(--ink); font-size: .95em; white-space: nowrap; }
 .stamp .civil { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
-.stamp.inline { display: inline; padding: 0 3px; margin: 0; border-bottom: 1px dotted var(--brass-dim); border-radius: 0; font-family: var(--mono); font-size: .88em; color: var(--gold); }
+.stamp.inline { display: inline; padding: 0 3px; margin: 0; border-bottom: 1px dotted var(--brass-dim); border-radius: 0; font-family: var(--mono); font-size: .88em; color: var(--gold-ink); }
 .stamp.inline:hover { color: var(--annatto); background: none; }
 
 /* ---------- room status (two rooms) ---------- */
@@ -161,7 +161,7 @@ label.field > input, label.field > select { min-width: 0; width: 100%; box-sizin
 /* ---------- version badge and versions panel ---------- */
 .version-badge .vb-dot { width: 8px; height: 8px; border-radius: 4px; background: var(--brass-dim); }
 .version-badge .vb-dot.writable { background: var(--sage); }
-.version-badge .vb-name { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--gold); }
+.version-badge .vb-name { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--gold-ink); }
 .versions { display: grid; gap: 16px; }
 .versions h3 { margin: 0 0 6px; font-weight: 400; }
 .versions-now { padding: 12px 14px; }
@@ -188,7 +188,7 @@ label.field > input, label.field > select { min-width: 0; width: 100%; box-sizin
 .dock > * { pointer-events: auto; }
 .dock.off .dock-face, .dock.leaping .dock-face { visibility: hidden; pointer-events: none; }
 .dock-face { position: relative; background: none; border: none; cursor: pointer; display: grid; justify-items: center; padding: 0; filter: drop-shadow(0 3px 5px rgba(0,0,0,.18)); }
-.dock-name { font-size: 11px; color: var(--gold); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r1); padding: 0 6px; margin-top: -6px; }
+.dock-name { font-size: 11px; color: var(--gold-ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r1); padding: 0 6px; margin-top: -6px; }
 .dock-hello-bubble { position: absolute; right: 70px; bottom: 34px; width: max-content; max-width: min(260px, calc(100vw - 110px)); text-align: left; font-size: 13px; line-height: 1.35; color: var(--ink); background: var(--surface); border: 1px solid var(--brass-dim); border-radius: var(--r3) var(--r3) var(--r1) var(--r3); padding: 8px 11px; box-shadow: 0 8px 20px rgba(0,0,0,.25); animation: hello-in var(--respond) var(--ease); }
 @keyframes hello-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
 .dock-unread { position: absolute; top: 6px; right: 4px; width: 11px; height: 11px; border-radius: 6px; background: var(--invite); box-shadow: 0 0 0 2px var(--page); }
@@ -203,7 +203,7 @@ label.field > input, label.field > select { min-width: 0; width: 100%; box-sizin
 .dock-status.live i { background: var(--invite); animation: vc-think 1.2s ease-in-out infinite; }
 .dock-tabs { display: flex; gap: 2px; align-items: center; border-bottom: 1px solid var(--rule); font-size: 12.5px; }
 .dock-tabs > button { background: none; border: none; border-bottom: 2px solid transparent; padding: 5px 9px; color: var(--ink-2); cursor: pointer; font: inherit; margin-bottom: -1px; }
-.dock-tabs > button.on { color: var(--gold); border-bottom-color: var(--brass); }
+.dock-tabs > button.on { color: var(--gold-ink); border-bottom-color: var(--brass); }
 .dock-mini { font-family: var(--sans); font-size: 11.5px; padding: 1px 4px; max-width: 96px; background: none; color: var(--ink-2); border: 1px solid var(--rule); border-radius: var(--r1); }
 .dock-log { flex: 1; padding: 10px 2px; min-height: 0; }
 .dock-log .turn-prose { font-size: 15px; }
@@ -211,7 +211,7 @@ label.field > input, label.field > select { min-width: 0; width: 100%; box-sizin
 .dock-context { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; padding: 4px 0 2px; border-top: 1px solid var(--rule); }
 .dock-context .ctx { border: 1px solid var(--rule); border-radius: var(--r2); padding: 1px 8px; color: var(--ink-2); background: none; font: inherit; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dock-context button.ctx { cursor: pointer; }
-.dock-context .ctx.on { border-color: var(--brass-dim); color: var(--gold); }
+.dock-context .ctx.on { border-color: var(--brass-dim); color: var(--gold-ink); }
 .dock-quick { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 0; }
 .dock-input { display: flex; gap: 6px; align-items: stretch; }
 .dock-input textarea { flex: 1; resize: none; font-family: var(--serif); font-size: 15px; min-width: 0; }
@@ -232,7 +232,7 @@ label.field > input, label.field > select { min-width: 0; width: 100%; box-sizin
 .leap { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; transform-origin: 50% 50%; will-change: transform; filter: drop-shadow(0 6px 8px rgba(0,0,0,.25)); }
 .leap .voice-character.alive .vc-body { animation: none; }
 .voice-tag { display: inline-flex; align-items: center; gap: 4px; background: none; border: 1px solid var(--rule); border-radius: var(--r3); padding: 1px 10px 1px 2px; cursor: pointer; color: var(--ink-2); }
-.voice-tag:hover { border-color: var(--brass-dim); color: var(--gold); }
+.voice-tag:hover { border-color: var(--brass-dim); color: var(--gold-ink); }
 @media (max-width: 720px) {
   .topbar { gap: 8px; padding: 8px 10px; }
   .topbar .here { display: none; }
@@ -251,7 +251,7 @@ label.field > input, label.field > select { min-width: 0; width: 100%; box-sizin
 /* ---------- the footer: whose atlas this is ---------- */
 .atlas-foot { display: flex; gap: 8px; justify-content: center; align-items: center; padding: 3px 12px 4px; font-size: 11px; letter-spacing: .03em; color: var(--ink-3); border-top: 1px solid var(--rule); background: var(--page); position: relative; z-index: 2; }
 .atlas-foot a { color: inherit; text-decoration: none; }
-.atlas-foot a:hover { color: var(--gold); }
+.atlas-foot a:hover { color: var(--gold-ink); }
 .atlas-foot b { font-weight: 600; letter-spacing: .14em; color: var(--ink-2); }
 .drawer-by { margin: 8px 0 0; text-align: center; font-size: 12px; letter-spacing: .04em; }
 .drawer-by b { letter-spacing: .14em; font-weight: 600; }

@@ -1,8 +1,8 @@
-.heavens { position: absolute; inset: 0; background: var(--sky-deep); color: #e9dcc0; }
+.heavens { position: absolute; inset: 0; background: var(--sky-deep); color: #e9dcc0; --gold-ink: var(--gold); }
 .heavens-canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 .heavens .panel { background: rgba(27, 23, 19, 0.84); border-color: #3a3027; color: #e9dcc0; }
 .heavens .chip { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; }
-.heavens .chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold); }
+.heavens .chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold-ink); }
 .heavens .faint { color: #8f816b; }
 .heavens-bar { position: absolute; left: 50%; transform: translateX(-50%); top: 12px; width: min(760px, calc(100% - 24px)); padding: 10px 14px; z-index: 4; }
 .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
@@ -12,6 +12,6 @@
 @media (max-width: 720px) { .heavens-tally { display: none; } }
 .heavens-tip { position: absolute; pointer-events: none; z-index: 5; max-width: 340px; padding: 9px 13px 10px; border-radius: var(--r3); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
 .heavens-tip-title { font-style: italic; font-size: 16px; line-height: 1.25; color: #f4e9cf; }
-.heavens-tip-line { font-size: 14px; color: var(--gold); margin-top: 3px; }
+.heavens-tip-line { font-size: 14px; color: var(--gold-ink); margin-top: 3px; }
 .heavens-tip-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #c9b998; margin-top: 6px; }
 .heavens-tip-path { font-size: 11px; margin-top: 2px; overflow-wrap: anywhere; }

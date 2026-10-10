@@ -17,8 +17,10 @@ export interface FieldsPrefs {
   relief: boolean
   /** map only: rhumb lines, the compass rose and the title cartouche */
   sea: boolean
+  /** follow the reader: a link followed from one page to another moves the map to it */
+  follow: boolean
 }
 
-export const FIELDS_DEFAULTS: FieldsPrefs = { view: 'map', names: 'all', mist: true, relief: true, sea: true }
+export const FIELDS_DEFAULTS: FieldsPrefs = { view: 'map', names: 'all', mist: true, relief: true, sea: true, follow: true }
 
 export const fieldsPrefs = createStore<FieldsPrefs>({ ...FIELDS_DEFAULTS }, 'grain-atlas:fields-v2')
