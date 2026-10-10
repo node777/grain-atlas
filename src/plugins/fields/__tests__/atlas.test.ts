@@ -4,6 +4,8 @@ import { layoutWorld } from '../layout'
 import { buildAtlas, CELL } from '../atlas'
 import { Kind, kindOf } from '../glyphs'
 import { WaterIndex } from '../water'
+import { packAtlas, unpackAtlas } from '../atlasWire'
+import { Grid } from '../geom'
 
 /** A minimal tree of entries from file paths (dirs first, then by name, as the repo model sorts). */
 function tree(paths: string[]): Map<string, Entry> {
@@ -187,5 +189,35 @@ describe('the atlas', () => {
     const ms = performance.now() - t0
     expect(at.n).toBe(30000)
     expect(ms).toBeLessThan(20000)
+  })
+})
+
+describe('the atlas, across a thread', () => {
+  it('packs in a worker and ties back to the page\'s own world unchanged', () => {
+    const entries = tree(SAMPLE)
+    const built = buildAtlas(layoutWorld(entries), entries)
+    // what postMessage does to it, then a page world laid out separately from the same tree
+    const wire = structuredClone(packAtlas(built))
+    const page = layoutWorld(tree(SAMPLE))
+    const at = unpackAtlas(wire, page)!
+    expect(at).not.toBeNull()
+    expect(at.world).toBe(page)
+    expect(at.plots.map((p) => p.path)).toEqual(built.plots.map((p) => p.path))
+    expect(at.plots.map((p) => [p.mx, p.my, p.mlx, p.mly])).toEqual(built.plots.map((p) => [p.mx, p.my, p.mlx, p.mly]))
+    expect(at.plot.map((p) => p.path)).toEqual(built.plot.map((p) => p.path))
+    expect([...at.settleOf].map(([p, s]) => [p.path, s.plot.path])).toEqual([...built.settleOf].map(([p, s]) => [p.path, s.plot.path]))
+    const heights = (a: typeof at) => [...a.height].map(([p, h]) => `${p.path}:${h}`).sort()
+    expect(heights(at)).toEqual(heights(built))
+    expect(at.glyphs).toBeInstanceOf(Grid)
+    const near = (a: typeof at) => { const ids: number[] = []; a.glyphs.each(-1e4, -1e4, 1e4, 1e4, (i) => ids.push(i)); return ids.sort((x, y) => x - y) }
+    expect(near(at)).toEqual(near(built))
+    expect(Array.from(at.gx)).toEqual(Array.from(built.gx))
+    expect(at.rivers.length).toBe(built.rivers.length)
+  })
+
+  it('refuses a world it was not built from', () => {
+    const entries = tree(SAMPLE)
+    const wire = packAtlas(buildAtlas(layoutWorld(entries), entries))
+    expect(unpackAtlas(wire, layoutWorld(tree(['elsewhere/README.md', 'elsewhere/a.md'])))).toBeNull()
   })
 })

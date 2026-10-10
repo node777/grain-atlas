@@ -20,7 +20,7 @@ import { layoutWorld, type Plot, type World, type Grain } from './layout'
 import { buildGeo, drawFields, roomOfFile, roomOfPlot, type Geo } from './draw'
 import { Minimap, MINI_W, MINI_H } from './minimap'
 import { fieldsPrefs } from './prefs'
-import { buildAtlas, type Atlas } from './atlas'
+import { useAtlas } from './atlasClient'
 import { MapRenderer, pickGlyph, markOf } from './mapdraw'
 import { FieldsControls } from './Controls'
 import './fields.css'
@@ -32,13 +32,6 @@ interface Pick { plot?: Plot; grain?: Grain; regionName?: string; glyph?: number
 
 let treeCount = 0
 
-// the atlas is worked out once per tree, the first time the map is asked for
-const atlases = new WeakMap<World, Atlas>()
-const atlasFor = (world: World, entries: Parameters<typeof buildAtlas>[1]) => {
-  let at = atlases.get(world)
-  if (!at) { at = buildAtlas(world, entries); atlases.set(world, at) }
-  return at
-}
 /** Where a plot stands in the view being drawn: the map re-strings a few, the bubbles none. */
 type PosOf = (p: Plot) => { x: number; y: number }
 const bubblePos: PosOf = (p) => p
@@ -98,7 +91,8 @@ export function Fields({ route }: ViewProps) {
   const world = useMemo<World | null>(() => (r.entries.size > 1 ? layoutWorld(r.entries) : null), [r.entries])
   const treeId = useMemo(() => ++treeCount, [r.entries])
   const geo = useMemo<Geo | null>(() => (world ? buildGeo(world) : null), [world])
-  const atlas = useMemo<Atlas | null>(() => (world && prefs.view === 'map' ? atlasFor(world, r.entries) : null), [world, prefs.view])
+  const atlas = useAtlas(world, r.entries, prefs.view === 'map')
+  const surveying = !!world && prefs.view === 'map' && !atlas
   const isMap = !!atlas
   const posOf: PosOf = isMap ? mapPos : bubblePos
   const discovered = useMemo(() => {
@@ -414,6 +408,7 @@ export function Fields({ route }: ViewProps) {
       <canvas ref={ref} className="fields-canvas" tabIndex={0}
         aria-label="The map of grain: regions, rooms and files. Arrow keys or WASD to wander, plus and minus to zoom, Enter to read the plot's door." />
       {!world && <div className="fields-wait">{r.phase === 'error' ? 'The tree could not be read.' : 'Sowing the map…'}</div>}
+      {surveying && <div className="fields-surveying panel linen-fine sans" role="status">Surveying the land for the map…</div>}
       {hover && (
         <div className="fields-tip panel linen-fine" style={tipStyle}>
           {hover.grain

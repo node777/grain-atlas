@@ -84,3 +84,4 @@
   .fields-ctl-bar > .fields-seg button { padding: 4px 8px; }
   .fields-ctl-bar > .fields-seg button svg { display: none; }
 }
+.fields-surveying { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); padding: 6px 14px; font-size: 13px; font-style: italic; color: var(--ink-2); z-index: 4; pointer-events: none; }
