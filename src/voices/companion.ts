@@ -1,11 +1,65 @@
 // The companion: whether the current voice sits out in the corner of every view, or rests in
 // its burrow in the header. Changing it is a small leap: the character jumps from the dock into
 // the header button, or out of it, along an arc. Still motion skips the leap.
+//
+// It starts tucked away. It comes out when the reader calls it: the header button, the
+// Companion toggle in Settings, or any "ask" button in the atlas. Once only, after about five
+// minutes of exploring, it pops out by itself to say hello. That is remembered in this browser,
+// so it never happens twice.
 
 import { createStore } from '@/core/store'
 import { prefersStill } from '@/core/settings'
+import { getRoute } from '@/core/router'
 
-export const companion = createStore<{ on: boolean }>({ on: true }, 'grain-atlas:companion')
+interface CompanionState {
+  on: boolean
+  /** the reader has called the companion at least once */
+  woken: boolean
+  /** the one unprompted hello has happened */
+  popped: boolean
+  /** seconds of active exploring counted toward the hello */
+  explored: number
+}
+
+export const companion = createStore<CompanionState>({ on: false, woken: false, popped: false, explored: 0 }, 'grain-atlas:companion-v2')
+
+/** The dock's window: open or not, a draft to start from, and a hello bubble. */
+export const dockUi = createStore<{ open: boolean; draft: string; hello: string }>({ open: false, draft: '', hello: '' })
+
+/** Wake the companion from any "ask" button: it comes out, opens, and holds a draft question. */
+export function askCompanion(draft = ''): void {
+  companion.set({ woken: true, popped: true })
+  const open = () => dockUi.set({ open: true, draft, hello: '' })
+  if (companion.get().on) { open(); return }
+  setCompanion(true, true)
+  const unsub = leaping.subscribe(() => { if (!leaping.get().leap) { unsub(); open() } })
+  if (!leaping.get().leap) { unsub(); open() }
+}
+
+const HELLO_AFTER = 300           // seconds of exploring
+const TICK = 15
+
+/** Count active exploring (tab visible, the reader moved in the last minute) toward the hello. */
+export function startExploreClock(helloText: () => string): () => void {
+  let lastActive = Date.now()
+  const mark = () => { lastActive = Date.now() }
+  const events = ['pointermove', 'keydown', 'wheel', 'touchstart'] as const
+  events.forEach((e) => window.addEventListener(e, mark, { passive: true }))
+  const id = setInterval(() => {
+    const c = companion.get()
+    if (c.popped) return
+    if (c.on || c.woken) { companion.set({ popped: true }); return }
+    const view = getRoute().view
+    if (document.visibilityState !== 'visible' || Date.now() - lastActive > 60_000 || !view || view === 'intro' || view === 'floor') return
+    const explored = c.explored + TICK
+    if (explored < HELLO_AFTER) { companion.set({ explored }); return }
+    companion.set({ explored, popped: true })
+    setCompanion(true, false)
+    const say = () => { dockUi.set({ hello: helloText() }); setTimeout(() => { if (dockUi.get().hello) dockUi.set({ hello: '' }) }, 12_000) }
+    if (leaping.get().leap) { const u = leaping.subscribe(() => { if (!leaping.get().leap) { u(); say() } }) } else say()
+  }, TICK * 1000)
+  return () => { clearInterval(id); events.forEach((e) => window.removeEventListener(e, mark)) }
+}
 
 export interface Leap {
   to: boolean                // the state the leap ends in
@@ -21,7 +75,9 @@ const centre = (el: Element) => {
 }
 
 /** Show or hide the companion; with motion on and both ends visible, it leaps between them. */
-export function setCompanion(on: boolean): void {
+export function setCompanion(on: boolean, byReader = true): void {
+  if (byReader) companion.set({ woken: true, popped: true })
+  if (!on) dockUi.set({ open: false, hello: '' })
   if (companion.get().on === on || leaping.get().leap) return
   const face = document.querySelector('.dock-face .voice-character')
   const home = document.querySelector('.companion-btn .voice-character')

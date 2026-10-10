@@ -92,3 +92,44 @@ describe('the astrolabe', () => {
     expect(limbCodec(23.44) - 90).toBeGreaterThan(28.7)
   })
 })
+
+describe('the astrolabe in depth', () => {
+  it('face-on, every layer lands exactly where it was drawn (perspective cancelled by its scale)', async () => {
+    const { planeMatrix, fromPlane, depths, FACE_ON } = await import('../tilt')
+    const D = depths(380)
+    for (const z of [D.back, D.plate, D.rete, D.limb, D.top]) {
+      const m = planeMatrix(FACE_ON, D.P, z)
+      for (const [x, y] of [[0, 0], [250, -170], [-380, 300]]) {
+        const [sx, sy] = fromPlane(m, x, y)
+        expect(Math.abs(sx - x)).toBeLessThan(1e-9)
+        expect(Math.abs(sy - y)).toBeLessThan(1e-9)
+      }
+    }
+  })
+
+  it('a pointer on the tilted instrument maps back to the point drawn under it', async () => {
+    const { planeMatrix, fromPlane, toPlane, depths, REST_3D } = await import('../tilt')
+    const D = depths(380)
+    for (const t of [REST_3D, { ax: 55, ay: -40 }, { ax: -10, ay: 30 }]) {
+      const m = planeMatrix(t, D.P, D.rete)
+      for (const [x, y] of [[0, 0], [200, -150], [-300, 260]]) {
+        const [sx, sy] = fromPlane(m, x, y)
+        const [bx, by] = toPlane(m, sx, sy)
+        expect(Math.abs(bx - x)).toBeLessThan(1e-6)
+        expect(Math.abs(by - y)).toBeLessThan(1e-6)
+      }
+    }
+  })
+
+  it('the turning angle read on the tilted rete is the angle drawn (time is read off the plane)', async () => {
+    const { planeMatrix, fromPlane, toPlane, depths, REST_3D } = await import('../tilt')
+    const D = depths(380)
+    const m = planeMatrix(REST_3D, D.P, D.rete)
+    for (let a = 0; a < 360; a += 37) {
+      const r = (a * Math.PI) / 180
+      const [sx, sy] = fromPlane(m, Math.cos(r) * 250, Math.sin(r) * 250)
+      const [x, y] = toPlane(m, sx, sy)
+      expect(Math.abs(angDiff((Math.atan2(y, x) * 180) / Math.PI, a))).toBeLessThan(1e-6)
+    }
+  })
+})

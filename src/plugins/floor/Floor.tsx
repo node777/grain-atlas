@@ -45,6 +45,7 @@ export function Floor({ route }: ViewProps) {
           <span>working on <b>{v.name ?? '…'}</b> {v.writable ? '(writable)' : '(read-only: writes become drafts)'}</span>
           <span>today {money(g.day === new Date().toISOString().slice(0, 10) ? g.today : 0)} of {money(g.limits.perDay)}</span>
           <span>{s.backend === 'bridge' ? 'through Claude Code (bridge)' : s.key ? 'Claude API' : 'no key yet'}</span>
+          <span className="floor-by">a floor laid by DJINN</span>
         </div>
       </header>
       <nav className="floor-tabs" aria-label="Threshing floor">

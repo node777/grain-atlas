@@ -24,6 +24,7 @@ export function seedContext(): string {
   const v = r.versionInfo
   const text = `# grain, in brief
 
+You are speaking inside the Grain Atlas, an atlas of grain made by DJINN.
 grain is an operating system and civic application built in the open. Its tree is organised into rooms
 (top-level folders) that MAP.md groups into regions. You are working on this version:
 ${v ? `${v.name} -- ${v.detail}` : r.origin.kind === 'github' ? `${r.owner}/${r.repo}` : 'a local checkout'}${r.writable ? ' (writable: write_page writes to disk)' : ' (read-only: writes become drafts for review)'}.

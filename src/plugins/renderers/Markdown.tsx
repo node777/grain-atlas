@@ -2,11 +2,11 @@
 // links into the maintainer's field are marked as out of reach, and every one-clock stamp in the
 // prose becomes a door into the sky of its moment.
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { resolveLink } from '@/grain/header'
-import { repo, isFieldRoom } from '@/grain/repo'
+import { repo, isFieldRoom, assetUrl } from '@/grain/repo'
 import { parseStamp } from '@/grain/stamps'
 import { hrefFor, navigate } from '@/core/router'
 import type { FileContext } from '@/core/registry'
@@ -16,7 +16,7 @@ import { settings } from '@/core/settings'
 
 const hljs = setupLanguages()
 
-function makeMarked(path: string, rawBase: string) {
+function makeMarked(path: string) {
   const entries = repo.get().entries
   const m = new Marked({ gfm: true, breaks: false })
   m.use({
@@ -43,22 +43,79 @@ function makeMarked(path: string, rawBase: string) {
         return `<a href="${hrefFor('read', target)}"${t}>${inner}</a>`
       },
       image({ href, title, text }) {
-        const local = resolveLink(path, href) ?? href
-        // raw.githubusercontent serves SVG as text/plain, which an <img> refuses; jsDelivr's GitHub
-        // mirror serves it as an image.
-        const target = /^(https?:|data:)/.test(href) ? href
-          : /\.svg$/i.test(local) ? `${cdnBase(rawBase)}/${local}` : `${rawBase}/${local}`
-        return `<img src="${escapeHtml(target)}" alt="${escapeHtml(text)}"${title ? ` title="${escapeHtml(title)}"` : ''} loading="lazy">`
+        // Relative images are left for fixMedia, which asks the active version for a loadable URL.
+        return `<img src="${escapeHtml(href)}" alt="${escapeHtml(text)}"${title ? ` title="${escapeHtml(title)}"` : ''} loading="lazy">`
       },
     },
   })
   return m
 }
 
-/** https://raw.githubusercontent.com/o/r/ref  ->  https://cdn.jsdelivr.net/gh/o/r@ref */
-function cdnBase(rawBase: string): string {
-  const m = /raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/(.+)$/.exec(rawBase)
-  return m ? `https://cdn.jsdelivr.net/gh/${m[1]}/${m[2]}@${m[3]}` : rawBase
+// Relative image paths must not reach the browser as src: it would ask the atlas's own server
+// for them. Park them in data-src, and fixMedia hands over a loadable URL.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  const el = node as Element
+  if (el.tagName === 'IMG') {
+    const src = el.getAttribute('src')
+    if (src && !isAbsolute(src)) { el.setAttribute('data-src', src); el.removeAttribute('src') }
+  } else if (el.tagName === 'SOURCE') {
+    const set = el.getAttribute('srcset')
+    if (set && !isAbsolute(set.trim())) { el.setAttribute('data-srcset', set); el.removeAttribute('srcset') }
+  }
+})
+
+function isAbsolute(u: string): boolean { return /^([a-z][a-z0-9+.-]*:|\/\/)/i.test(u) }
+
+/** github.com/o/r/blob/ref/path  ->  raw.githubusercontent.com/o/r/ref/path (an <img> can load it) */
+const rawGithub = (u: string) => u.replace(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|raw)\/(.+)$/, 'https://raw.githubusercontent.com/$1/$2/$3')
+
+/**
+ * Pages mix Markdown images with raw HTML (<img>, <picture><source>, <a>), and GitHub resolves
+ * their relative paths against the page. Do the same here: images and sources load from the
+ * active version (GitHub, a local folder or the bridge), and relative links stay in the atlas.
+ * A picture that cannot load shows its words in a small frame instead of a broken icon.
+ */
+function fixMedia(root: HTMLElement, path: string): void {
+  const entries = repo.get().entries
+  for (const img of root.querySelectorAll<HTMLImageElement>('img')) {
+    if (img.dataset.fixed) continue
+    img.dataset.fixed = '1'
+    img.addEventListener('error', () => {
+      if (img.dataset.failed) return
+      img.dataset.failed = '1'
+      const span = document.createElement('span')
+      span.className = 'img-missing'
+      span.textContent = img.alt || img.getAttribute('src')?.split('/').pop() || 'an image'
+      span.title = `${img.getAttribute('src') ?? ''} could not be loaded`
+      img.replaceWith(span)
+    }, { once: true })
+    const parked = img.dataset.src
+    const src = parked ?? img.getAttribute('src') ?? ''
+    if (!src) continue
+    if (!parked) { const raw = rawGithub(src); if (raw !== src) img.src = raw; continue }
+    const target = resolveLink(path, src)
+    if (!target) { img.dispatchEvent(new Event('error')); continue }
+    assetUrl(target).then((u) => { img.src = u }).catch(() => img.dispatchEvent(new Event('error')))
+  }
+  for (const source of root.querySelectorAll<HTMLSourceElement>('source[data-srcset]')) {
+    const first = (source.dataset.srcset ?? '').trim().split(/\s+/)[0]
+    const target = first ? resolveLink(path, first) : null
+    if (!target) { source.remove(); continue }
+    assetUrl(target).then((u) => source.setAttribute('srcset', u)).catch(() => source.remove())
+  }
+  // raw-HTML anchors (Markdown links were already rewritten by the renderer)
+  for (const a of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+    const href = a.getAttribute('href') ?? ''
+    if (!href || href.startsWith('#') || isAbsolute(href)) {
+      if (isAbsolute(href) && !a.target) { a.target = '_blank'; a.rel = 'noreferrer' }
+      continue
+    }
+    const target = resolveLink(path, href)
+    if (target && entries.has(target)) { a.setAttribute('href', hrefFor('read', target)); continue }
+    a.removeAttribute('href')
+    a.className = 'field-link'
+    a.title = `${target ?? href} ${target && isFieldRoom(target) ? 'rests in the maintainer\'s field' : 'is not in this tree'}`
+  }
 }
 
 function escapeHtml(s: string): string {
@@ -132,22 +189,23 @@ function liftHeader(text: string, dropTitle: boolean): { body: string; fields: A
   return { body: [...lines.slice(0, h), ...lines.slice(end)].join('\n'), fields }
 }
 
-export function Markdown({ path, text, rawUrl, embedded }: FileContext) {
+export function Markdown({ path, text, embedded }: FileContext) {
   const ref = useRef<HTMLDivElement>(null)
-  const rawBase = rawUrl.slice(0, rawUrl.length - path.length - 1)
   const html = useMemo(() => {
     const full = text.length > 600_000 ? text.slice(0, 600_000) + '\n\n*… the page continues beyond what the atlas unrolls at once.*' : text
     const { body, fields } = liftHeader(full, !embedded)
-    const m = makeMarked(path, rawBase)
+    const m = makeMarked(path)
     const head = fields.length
       ? `<dl class="page-fields">${fields.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${m.parseInline(v) as string}</dd>`).join('')}</dl>`
       : ''
     const out = head + (m.parse(body) as string)
-    return DOMPurify.sanitize(out, { ADD_ATTR: ['target', 'data-anchor', 'data-lang'] })
-  }, [path, text, rawBase, embedded])
+    return DOMPurify.sanitize(out, { ADD_ATTR: ['target', 'data-anchor', 'data-lang', 'align'] })
+  }, [path, text, embedded])
 
   useEffect(() => {
-    if (ref.current) linkStamps(ref.current)
+    if (!ref.current) return
+    fixMedia(ref.current, path)
+    linkStamps(ref.current)
   }, [html])
 
   const onClick = (e: React.MouseEvent) => {
@@ -187,8 +245,23 @@ export function Code({ path, text }: FileContext) {
   )
 }
 
-export function ImageView({ path, rawUrl, text }: FileContext) {
-  // raw.githubusercontent serves SVG as text/plain, so draw SVG from its own text.
-  const src = path.toLowerCase().endsWith('.svg') && text ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}` : rawUrl
-  return <img src={src} alt={path} style={{ maxWidth: '100%', borderRadius: 'var(--r2)', background: 'var(--sky)' }} />
+export function ImageView({ path, text }: FileContext) {
+  // SVG draws from its own text; anything else loads from the active version (GitHub, folder, bridge).
+  const svg = path.toLowerCase().endsWith('.svg') && text ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}` : ''
+  const [src, setSrc] = useState(svg)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    setFailed(false)
+    if (svg) { setSrc(svg); return }
+    let live = true
+    assetUrl(path).then((u) => { if (live) setSrc(u) }).catch(() => { if (live) setFailed(true) })
+    return () => { live = false }
+  }, [path, svg])
+  if (failed) return <p className="img-missing">{path.split('/').pop()} could not be loaded from this version.</p>
+  return (
+    <figure className="image-view">
+      {src && <img src={src} alt={path} onError={() => setFailed(true)} />}
+      <figcaption className="faint sans">{path.split('/').pop()}</figcaption>
+    </figure>
+  )
 }

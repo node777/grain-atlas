@@ -119,7 +119,7 @@ export function Fields({ route }: ViewProps) {
 
   useEffect(() => {
     const names = ['--page', '--surface', '--surface-2', '--ink', '--ink-2', '--ink-3', '--rule', '--brass', '--brass-dim', '--gold', '--star',
-      '--el-aether', '--el-air', '--el-fire', '--el-water', '--el-earth', '--invite', '--madder', '--annatto', '--weld', '--sage']
+      '--el-aether', '--el-air', '--el-fire', '--el-water', '--el-earth', '--invite', '--madder', '--annatto', '--weld', '--sage', '--elder']
     colors.current = Object.fromEntries(names.map((n) => [n, cssVar(n)]))
     colorsGen.current++
     setKeyColors(colors.current)

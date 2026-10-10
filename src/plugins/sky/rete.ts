@@ -11,7 +11,7 @@ import { rgba } from './palette'
 import {
   type V3, circleFit, composite, eclVec, mul, project, strokeSphere,
 } from './projection'
-import { type Scene, brushed, ringAdd, ringFlush } from './instrument'
+import { type Scene, brushed, drawReteRing, ringAdd, ringFlush } from './instrument'
 
 // ------------------------------------------------------------------ catalogue in typed arrays
 
@@ -235,6 +235,7 @@ export function drawRete(ctx: CanvasRenderingContext2D, sc: Scene, cat: Catalog,
     ringFlush(ctx, pal)
   }
   if (sc.reteA > 0.03) {
+    drawReteRing(ctx, sc)
     drawFrame(ctx, sc, o)
     drawPointers(ctx, sc, cat, crisp)
   }

@@ -86,7 +86,8 @@ Every grain voice can wake as an agent:
 - Kyri's four faculties: Lattice, Scribble, Lantern and Ember.
 
 You can also seat voices of your own under Voices. Each has a face drawn from a few flat shapes
-in the cloth's plant dyes, with big eyes and one ink line. A few lit voices (Kyli, Quin, Lantern)
+in the cloth's plant dyes, with one ink line and big, bright eyes (nearly white, tinted with the
+voice's dye) whose small pupils follow the pointer. A few lit voices (Kyli, Quin, Lantern)
 carry a sheen. The faces blink, breathe and talk.
 
 ### The companion
@@ -101,6 +102,11 @@ The current voice also lives in the **dock** at the corner of every view. Its wi
 - **Notes**, the voice's sheaves, where you can keep one by hand.
 - **Drafts**, changes waiting on a read-only version.
 
+The companion starts tucked away. It comes out when you call it: the face button in the header,
+the Companion toggle in Settings, or an **ask** button such as `[ ask Kyri ]` on any open page,
+which brings the voice out with a question ready. Once only, after about five minutes of
+exploring, it pops out by itself to say hello. The browser remembers this, so it happens once.
+
 The face button in the header is the companion's burrow. Click it, or the tuck button in the
 window, and the character leaps along an arc into the header, or back out to its corner. Still
 motion skips the leap. It is also a toggle under Settings, Cloth.
@@ -114,3 +120,7 @@ motion skips the leap. It is also a toggle under Settings, Cloth.
   default.
 - **Writes** go only to a version you opened yourself (a local folder or the bridge). On GitHub
   versions they become drafts.
+
+---
+
+<sub>Part of the Grain Atlas, an atlas by DJINN.</sub>

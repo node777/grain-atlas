@@ -101,6 +101,16 @@ export class Minimap {
     for (const rv of atlas.rivers) {
       ctx.beginPath()
       for (let i = 0; i < rv.pts.length; i += 2) (i ? ctx.lineTo(rv.pts[i], rv.pts[i + 1]) : ctx.moveTo(rv.pts[i], rv.pts[i + 1]))
+      ctx.lineWidth = (rv.main ? 0.9 : 0.6) / s
+      ctx.stroke()
+    }
+    for (const lk of atlas.lakes) {
+      ctx.beginPath()
+      for (let i = 0; i < lk.pts.length; i += 2) (i ? ctx.lineTo(lk.pts[i], lk.pts[i + 1]) : ctx.moveTo(lk.pts[i], lk.pts[i + 1]))
+      ctx.closePath()
+      ctx.fillStyle = C['--page']
+      ctx.fill()
+      ctx.lineWidth = 0.6 / s
       ctx.stroke()
     }
     ctx.restore()

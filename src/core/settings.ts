@@ -1,7 +1,7 @@
 // Reader preferences, kept in this browser only.
 
 import { createStore } from './store'
-import { UJJAIN, type Place } from '@/astro/positions'
+import { DEFAULT_PLACE, type Place } from '@/astro/positions'
 import type { AyanamsaId } from '@/astro/ayanamsa'
 import { nearestCity } from '@/astro/cities'
 
@@ -34,7 +34,7 @@ export const settings = createStore<Settings>(
     mode: 'hearth',
     element: 'earth',
     motion: 'full',
-    place: UJJAIN,
+    place: DEFAULT_PLACE,
     placeSource: 'unset',
     ayanamsa: 'lahiri',
     lens: 'jyotish',
@@ -46,7 +46,13 @@ export const settings = createStore<Settings>(
   'grain-atlas:settings',
 )
 
-/** Ask once for the reader's location; Ujjain stays the place when the answer is no. */
+// The default place moved from Ujjain to Reno; readers who never chose a place follow it.
+{
+  const s = settings.get()
+  if ((s.placeSource === 'fallback' || s.placeSource === 'unset') && s.place.name === 'Ujjain') settings.set({ place: DEFAULT_PLACE })
+}
+
+/** Ask once for the reader's location; Reno, Nevada stays the place when the answer is no. */
 export function settlePlaceOnce(): void {
   const s = settings.get()
   if (s.placeSource !== 'unset') return
@@ -64,7 +70,7 @@ export function settlePlaceOnce(): void {
         placeSource: 'geolocation',
       })
     },
-    () => settings.set({ placeSource: 'fallback', place: UJJAIN }),
+    () => settings.set({ placeSource: 'fallback', place: DEFAULT_PLACE }),
     { enableHighAccuracy: false, timeout: 12000, maximumAge: 86400000 },
   )
 }

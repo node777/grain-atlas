@@ -70,3 +70,7 @@ template-manifest.kyri, session-logs/) live only in the maintainer's private fie
   in the working tree.
 
 The code is in `src/sources/versions.ts`.
+
+---
+
+<sub>Part of the Grain Atlas, an atlas by DJINN.</sub>

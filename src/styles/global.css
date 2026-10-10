@@ -30,7 +30,7 @@ button { font: inherit; color: inherit; }
 .faint { color: var(--ink-3); }
 
 /* ---------- the frame ---------- */
-.atlas { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr; grid-template-columns: minmax(0, 1fr); }
+.atlas { position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); }
 .atlas-stage { position: relative; overflow: hidden; }
 .atlas-stage > .view { position: absolute; inset: 0; }
 
@@ -189,6 +189,8 @@ label.field > input, label.field > select { min-width: 0; width: 100%; box-sizin
 .dock.off .dock-face, .dock.leaping .dock-face { visibility: hidden; pointer-events: none; }
 .dock-face { position: relative; background: none; border: none; cursor: pointer; display: grid; justify-items: center; padding: 0; filter: drop-shadow(0 3px 5px rgba(0,0,0,.18)); }
 .dock-name { font-size: 11px; color: var(--gold); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r1); padding: 0 6px; margin-top: -6px; }
+.dock-hello-bubble { position: absolute; right: 70px; bottom: 34px; width: max-content; max-width: min(260px, calc(100vw - 110px)); text-align: left; font-size: 13px; line-height: 1.35; color: var(--ink); background: var(--surface); border: 1px solid var(--brass-dim); border-radius: var(--r3) var(--r3) var(--r1) var(--r3); padding: 8px 11px; box-shadow: 0 8px 20px rgba(0,0,0,.25); animation: hello-in var(--respond) var(--ease); }
+@keyframes hello-in { from { opacity: 0; transform: translateY(6px) scale(.97); } to { opacity: 1; transform: none; } }
 .dock-unread { position: absolute; top: 6px; right: 4px; width: 11px; height: 11px; border-radius: 6px; background: var(--invite); box-shadow: 0 0 0 2px var(--page); }
 .dock-panel { width: min(440px, calc(100vw - 32px)); height: min(620px, calc(100vh - 150px)); display: flex; flex-direction: column; padding: 10px 12px; box-shadow: 0 18px 40px rgba(0,0,0,.35); animation: folio-in var(--respond) var(--ease); transition: width var(--respond) var(--ease); }
 .dock-panel.wide { width: min(720px, calc(100vw - 32px)); height: min(760px, calc(100vh - 120px)); }
@@ -245,3 +247,12 @@ label.field > input, label.field > select { min-width: 0; width: 100%; box-sizin
   .topbar .spacer { flex: 1 1 0; min-width: 0; }
   .topbar .mode-btn, .dock-wide { display: none; }
 }
+
+/* ---------- the footer: whose atlas this is ---------- */
+.atlas-foot { display: flex; gap: 8px; justify-content: center; align-items: center; padding: 3px 12px 4px; font-size: 11px; letter-spacing: .03em; color: var(--ink-3); border-top: 1px solid var(--rule); background: var(--page); position: relative; z-index: 2; }
+.atlas-foot a { color: inherit; text-decoration: none; }
+.atlas-foot a:hover { color: var(--gold); }
+.atlas-foot b { font-weight: 600; letter-spacing: .14em; color: var(--ink-2); }
+.drawer-by { margin: 8px 0 0; text-align: center; font-size: 12px; letter-spacing: .04em; }
+.drawer-by b { letter-spacing: .14em; font-weight: 600; }
+@media (max-width: 720px) { .atlas-foot-extra { display: none; } }

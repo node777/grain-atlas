@@ -16,3 +16,4 @@
 .intro .intro-go { border-color: var(--invite); color: #f1c98b; }
 .intro-note { font-size: 12px !important; font-style: normal !important; color: #8f816b; margin-top: 14px !important; }
 .intro-skip { position: absolute; right: 18px; bottom: 18px; color: #b4a892; }
+.intro-by { font-family: var(--sans); font-size: 11px !important; font-style: normal !important; letter-spacing: .22em; text-transform: uppercase; color: #8f816b; opacity: .8; margin-top: 18px !important; }

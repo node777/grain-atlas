@@ -1,6 +1,6 @@
-// How the Fields are drawn, kept in this browser only. Bubbles is the plot-and-furrow chart the
-// view has always drawn; Map lays the same tree out as an old atlas: towns, farmland, rivers
-// and ranges. The other choices apply to whichever view is up.
+// How the Fields are drawn, kept in this browser only. Map, the default, lays the tree out as an
+// old atlas: towns, farmland, rivers and ranges; Bubbles is the plot-and-furrow chart the view
+// first drew. The other choices apply to whichever view is up.
 
 import { createStore } from '@/core/store'
 
@@ -19,6 +19,6 @@ export interface FieldsPrefs {
   sea: boolean
 }
 
-export const FIELDS_DEFAULTS: FieldsPrefs = { view: 'bubbles', names: 'all', mist: true, relief: true, sea: true }
+export const FIELDS_DEFAULTS: FieldsPrefs = { view: 'map', names: 'all', mist: true, relief: true, sea: true }
 
-export const fieldsPrefs = createStore<FieldsPrefs>({ ...FIELDS_DEFAULTS }, 'grain-atlas:fields')
+export const fieldsPrefs = createStore<FieldsPrefs>({ ...FIELDS_DEFAULTS }, 'grain-atlas:fields-v2')

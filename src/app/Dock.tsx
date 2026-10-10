@@ -7,7 +7,7 @@ import { useStore } from '@/core/store'
 import { hrefFor, useRoute } from '@/core/router'
 import { activeVoice, voiceById, allVoices, userVoices } from '@/voices/voices'
 import { Character } from '@/voices/Character'
-import { companion, leaping, setCompanion, landLeap, leapFrames } from '@/voices/companion'
+import { companion, leaping, setCompanion, landLeap, leapFrames, dockUi } from '@/voices/companion'
 import { threads, newThread, ask, stopThread, loadThreads } from '@/agent/threads'
 import { agentSettings } from '@/agent/runtime'
 import { MODELS, EFFORTS, type Effort } from '@/agent/models'
@@ -53,7 +53,8 @@ export function Dock() {
   const notes = useStore(sheaves, (s) => s.list.filter((x) => x.voice === voice.name).slice(0, 30))
   const draftList = useStore(drafts, (s) => s.list)
   const selection = useSelection()
-  const [open, setOpen] = useState(false)
+  const { open, draft, hello } = useStore(dockUi)
+  const setOpen = (o: boolean) => dockUi.set({ open: o, hello: '' })
   const [wide, setWide] = useState(false)
   const [tab, setTab] = useState<Tab>('talk')
   const [text, setText] = useState('')
@@ -64,7 +65,8 @@ export function Dock() {
   const input = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => { loadThreads() }, [])
-  useEffect(() => { if (!on) setOpen(false) }, [on])
+  useEffect(() => { if (!on && open) setOpen(false) }, [on])
+  useEffect(() => { if (draft) { setText(draft); setTab('talk'); dockUi.set({ draft: '' }) } }, [draft])
   useEffect(() => {
     if (!open) return
     input.current?.focus()
@@ -217,8 +219,9 @@ export function Dock() {
           className="dock-face" onClick={() => setOpen(!open)} tabIndex={on ? 0 : -1} aria-hidden={!on}
           aria-label={`${open ? 'Close' : 'Open'} ${voice.name}`} title={`${voice.name}: ask about anything here`}
         >
-          <Character look={voice.look} size={FACE} speaking={running} thinking={thinking} mood={unread ? 'happy' : 'idle'} title={voice.name} />
+          <Character look={voice.look} size={FACE} speaking={running} thinking={thinking} mood={unread || hello ? 'happy' : 'idle'} title={voice.name} />
           {unread && <span className="dock-unread" aria-label="a new answer" />}
+          {hello && !open && <span className="dock-hello-bubble sans" role="status">{hello}</span>}
           {!open && <span className="dock-name sans">{voice.name}</span>}
         </button>
       </div>

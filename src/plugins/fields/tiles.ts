@@ -1,10 +1,13 @@
 // A cache of pre-drawn map tiles, so panning and zooming only copy pixels. Tiles are square
-// pieces of the world drawn at power-of-two scales: a frame picks a level near the screen's,
-// draws the tiles it already holds, renders a few missing ones inside a time budget (nearest
-// the middle first), and lets a stand-in show through for the rest until they come. The
-// stand-in is one coarse level of the whole world, drawn first and kept for good, with the
-// next level up (or down, when zooming out) laid over it where the cache still has it.
-// Least recently used tiles are let go once the cache is full.
+// pieces of the world drawn at power-of-two scales (levels). The level the zoom asks for is the
+// target; the level on screen is always one complete set: the nearest level whose every visible
+// tile is already drawn. While the target's tiles are being made (a few per frame, inside a time
+// budget, a level at a time from the finest complete one upward, nearest the middle first) the
+// complete level stays up, scaled; each newly whole level takes over everywhere at once, with a
+// short crossfade. Levels are never
+// mixed on screen. A coarse level of the whole world is drawn first and kept for good, so there
+// is always a complete level to show; a ring of tiles just beyond the view is made ahead, so
+// panning rarely uncovers a gap. Least recently used tiles are let go once the cache is full.
 
 import type { Camera } from '@/ui/useCanvas'
 
@@ -13,16 +16,26 @@ import type { Camera } from '@/ui/useCanvas'
 export type TileRender = (g: CanvasRenderingContext2D, x0: number, y0: number, s: number) => void
 
 export const TILE = 256
+const FADE_MS = 180
 
 type Box = { x0: number; y0: number; x1: number; y1: number }
+type View = { w: number; h: number; dpr: number }
+
+/** What a frame drew, for checking that levels never mix (read by tests through a debug hook). */
+export interface TileFrame { target: number; shown: number; fading: number | null; levels: number[] }
 
 export class TileCache {
   private tiles = new Map<string, HTMLCanvasElement>()
   private base = new Map<string, HTMLCanvasElement>()     // the overview level, never evicted
+  private baseZ = 0
   private pool: HTMLCanvasElement[] = []
   private key = ''
   private z: number | null = null
-  constructor(private max = 300) {}
+  private shown: number | null = null
+  private fade: { from: number; t0: number } | null = null
+  /** Set to an array to record each frame's levels (diagnostics only). */
+  log: TileFrame[] | null = null
+  constructor(private max = 360) {}
 
   /** Forget every tile when what they show has changed (tree, theme, settings, pixel ratio). */
   reset(key: string): void {
@@ -32,11 +45,17 @@ export class TileCache {
     for (const c of this.base.values()) this.release(c)
     this.tiles.clear()
     this.base.clear()
+    this.shown = null
+    this.fade = null
   }
 
   private release(c: HTMLCanvasElement) { if (this.pool.length < 64) this.pool.push(c) }
 
+  /** A running estimate of what one tile costs, so a frame does not start one it cannot finish. */
+  private cost = 3
+
   private make(render: TileRender, z: number, tx: number, ty: number): HTMLCanvasElement {
+    const q0 = performance.now()
     const c = this.pool.pop() ?? document.createElement('canvas')
     if (c.width !== TILE) { c.width = TILE; c.height = TILE }
     // a CPU-backed canvas, read back one pixel once drawn: canvases record their drawing and
@@ -50,104 +69,134 @@ export class TileCache {
     render(g, tx * tw, ty * tw, Math.pow(2, z))
     g.restore()
     g.getImageData(0, 0, 1, 1)
+    this.cost = this.cost * 0.8 + (performance.now() - q0) * 0.2
     return c
   }
 
-  /** Draw the view. `world` bounds the land (for the overview level). Returns how many tiles
-   *  are still missing; the caller redraws until none are. */
-  draw(ctx: CanvasRenderingContext2D, cam: Camera, view: { w: number; h: number; dpr: number }, world: Box, render: TileRender, budgetMs: number): number {
+  private get(z: number, tx: number, ty: number): HTMLCanvasElement | undefined {
+    return z === this.baseZ ? this.base.get(`${tx}:${ty}`) : this.tiles.get(`${z}:${tx}:${ty}`)
+  }
+
+  /** The tiles of a level that cover a world rectangle. */
+  private span(z: number, x0: number, y0: number, x1: number, y1: number): Array<[number, number]> {
+    const tw = TILE / Math.pow(2, z)
+    const out: Array<[number, number]> = []
+    for (let tx = Math.floor(x0 / tw); tx <= Math.floor(x1 / tw); tx++) for (let ty = Math.floor(y0 / tw); ty <= Math.floor(y1 / tw); ty++) out.push([tx, ty])
+    return out
+  }
+
+  private complete(z: number, list: Array<[number, number]>): boolean {
+    for (const [tx, ty] of list) if (!this.get(z, tx, ty)) return false
+    return true
+  }
+
+  /** Draw the view. `world` bounds the land (for the overview level). Returns true while more
+   *  frames are needed (tiles still coming, or a crossfade under way). */
+  draw(ctx: CanvasRenderingContext2D, cam: Camera, view: View, world: Box, render: TileRender, budgetMs: number, still: boolean): boolean {
     const { w, h, dpr } = view
     const t0 = performance.now()
-    // the level: just finer than the screen (never blown up more than a tenth), held while
-    // zooming out until it is nearly twice too fine
+    // the target level: just finer than the screen (never blown up more than a tenth), held
+    // while zooming out until it is nearly twice too fine
     const ideal = Math.log2(cam.k * dpr)
     if (this.z === null || ideal - this.z > 0.15 || ideal - this.z < -0.9) this.z = Math.ceil(ideal - 0.15)
-    const z = this.z
-    const span = Math.max(world.x1 - world.x0, world.y1 - world.y0)
-    const zb = Math.min(z - 1, Math.floor(Math.log2((TILE * 2) / span)))
-    const dev = (wx: number, wy: number): [number, number] => [Math.round(((wx - cam.x) * cam.k + w / 2) * dpr), Math.round(((wy - cam.y) * cam.k + h / 2) * dpr)]
+    const zt = this.z
+    const spanW = Math.max(world.x1 - world.x0, world.y1 - world.y0)
+    const zb = Math.min(zt, Math.floor(Math.log2((TILE * 2) / spanW)))
+    if (zb !== this.baseZ) { for (const c of this.base.values()) this.release(c); this.base.clear(); this.baseZ = zb }
     const vx0 = cam.x - w / 2 / cam.k, vy0 = cam.y - h / 2 / cam.k
     const vx1 = cam.x + w / 2 / cam.k, vy1 = cam.y + h / 2 / cam.k
+    // room for another tile: within the budget even counting what a tile usually costs (the
+    // first of a frame may always start, else a run of heavy tiles would never be made)
+    let made = 0
+    const budget = () => {
+      const el = performance.now() - t0
+      if (made > 0 && el + this.cost > budgetMs) return false
+      if (el >= budgetMs) return false
+      made++
+      return true
+    }
+
+    // 1. the overview, whole, before anything else (it is small, and it is the last resort)
+    for (const [tx, ty] of this.span(zb, world.x0, world.y0, world.x1, world.y1)) {
+      const k = `${tx}:${ty}`
+      if (!this.base.has(k) && budget()) this.base.set(k, this.make(render, zb, tx, ty))
+    }
+
+    // 2. build toward the target a level at a time: the first incomplete level above the finest
+    //    complete one, so a long zoom sharpens step by step (each step a quarter of the work of
+    //    the next) rather than waiting on a blur. Middle first; then a ring beyond the view.
+    const visOf = (z: number) => this.span(z, vx0, vy0, vx1, vy1)
+    let floor = zb
+    for (let z = zt; z > zb; z--) if (this.complete(z, visOf(z))) { floor = z; break }
+    let zbuild = zt
+    if (floor < zt) for (let z = floor + 1; z <= zt; z++) if (!this.complete(z, visOf(z))) { zbuild = z; break }
+    const tw = TILE / Math.pow(2, zbuild)
+    const vis = visOf(zbuild)
+    const mx = (vx0 + vx1) / 2 / tw, my = (vy0 + vy1) / 2 / tw
+    const byNear = (a: [number, number], b: [number, number]) => ((a[0] + 0.5 - mx) ** 2 + (a[1] + 0.5 - my) ** 2) - ((b[0] + 0.5 - mx) ** 2 + (b[1] + 0.5 - my) ** 2)
+    vis.sort(byNear)
+    let gaps = 0
+    for (const [tx, ty] of vis) {
+      if (zbuild === zb) { if (!this.base.has(`${tx}:${ty}`)) gaps++; continue }
+      const key = `${zbuild}:${tx}:${ty}`
+      const cv = this.tiles.get(key)
+      if (cv) { this.tiles.delete(key); this.tiles.set(key, cv); continue }
+      if (budget()) this.tiles.set(key, this.make(render, zbuild, tx, ty))
+      else gaps++
+    }
+    if (!gaps && zbuild === zt && zt !== zb) {
+      const ring = this.span(zt, vx0 - tw, vy0 - tw, vx1 + tw, vy1 + tw).filter(([tx, ty]) => !this.tiles.has(`${zt}:${tx}:${ty}`)).sort(byNear)
+      for (const [tx, ty] of ring) { if (!budget()) { gaps++; break } this.tiles.set(`${zt}:${tx}:${ty}`, this.make(render, zt, tx, ty)) }
+    }
+
+    // 3. which complete level to show: the target if whole; else a finer one already whole (it
+    //    only shrinks, so stays crisp); else the finest whole level below; at worst the overview
+    let show = zb
+    for (const z of [zt, zt + 1, zt + 2]) if (z > zb && this.complete(z, visOf(z))) { show = z; break }
+    if (show === zb) for (let z = zt - 1; z > zb; z--) if (this.complete(z, visOf(z))) { show = z; break }
+    if (this.shown !== null && show !== this.shown && !still && this.complete(this.shown, visOf(this.shown))) this.fade = { from: this.shown, t0 }
+    this.shown = show
 
     ctx.save()
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-
-    // the overview: render what is missing of it first (it is small), then draw what shows
-    const bw = TILE / Math.pow(2, zb)
-    const over = () => {
-      for (let tx = Math.floor(vx0 / bw); tx <= Math.floor(vx1 / bw); tx++) {
-        for (let ty = Math.floor(vy0 / bw); ty <= Math.floor(vy1 / bw); ty++) {
-          const cv = this.base.get(`${tx}:${ty}`)
-          if (!cv) continue
-          // only the part on screen, so a deep zoom never asks for a vast scaled image
-          const sx0 = Math.max(tx * bw, vx0), sy0 = Math.max(ty * bw, vy0)
-          const sx1 = Math.min((tx + 1) * bw, vx1), sy1 = Math.min((ty + 1) * bw, vy1)
-          if (sx1 <= sx0 || sy1 <= sy0) continue
-          const f = TILE / bw
-          const [d0, e0] = dev(sx0, sy0), [d1, e1] = dev(sx1, sy1)
-          ctx.drawImage(cv, (sx0 - tx * bw) * f, (sy0 - ty * bw) * f, (sx1 - sx0) * f, (sy1 - sy0) * f, d0, e0, d1 - d0, e1 - e0)
-        }
-      }
+    this.paint(ctx, cam, view, show, visOf(show), 1)
+    let fading: number | null = null
+    if (this.fade) {
+      const u = (t0 - this.fade.t0) / FADE_MS
+      const list = visOf(this.fade.from)
+      if (u >= 1 || this.fade.from === show || !this.complete(this.fade.from, list)) this.fade = null
+      else { fading = this.fade.from; this.paint(ctx, cam, view, this.fade.from, list, 1 - u * u * (3 - 2 * u)) }
     }
-    let baseMissing = 0
-    for (let tx = Math.floor(world.x0 / bw); tx <= Math.floor(world.x1 / bw); tx++) {
-      for (let ty = Math.floor(world.y0 / bw); ty <= Math.floor(world.y1 / bw); ty++) {
-        const k = `${tx}:${ty}`
-        if (this.base.has(k)) continue
-        if (performance.now() - t0 < budgetMs) this.base.set(k, this.make(render, zb, tx, ty))
-        else baseMissing++
-      }
-    }
-
-    const tw = TILE / Math.pow(2, z)
-    const tx0 = Math.floor(vx0 / tw), tx1 = Math.floor(vx1 / tw)
-    const ty0 = Math.floor(vy0 / tw), ty1 = Math.floor(vy1 / tw)
-    const mx = (tx0 + tx1) / 2, my = (ty0 + ty1) / 2
-    const order: Array<[number, number, number]> = []
-    for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++) order.push([tx, ty, (tx - mx) ** 2 + (ty - my) ** 2])
-    order.sort((a, b) => a[2] - b[2])
-
-    // first pass: what we hold or can render now; note the gaps
-    const have: Array<[HTMLCanvasElement, number, number, number, number]> = []
-    const gaps: Array<[number, number]> = []
-    for (const [tx, ty] of order) {
-      const key = `${z}:${tx}:${ty}`
-      let cv = this.tiles.get(key)
-      if (cv) { this.tiles.delete(key); this.tiles.set(key, cv) }
-      else if (performance.now() - t0 < budgetMs) { cv = this.make(render, z, tx, ty); this.tiles.set(key, cv) }
-      if (!cv) { gaps.push([tx, ty]); continue }
-      const [x0, y0] = dev(tx * tw, ty * tw), [x1, y1] = dev((tx + 1) * tw, (ty + 1) * tw)
-      have.push([cv, x0, y0, x1 - x0, y1 - y0])
-    }
-
-    // stand-ins under the gaps: the overview everywhere, then the neighbouring levels if held
-    if (gaps.length) {
-      over()
-      for (const [tx, ty] of gaps) {
-        const par = this.tiles.get(`${z - 1}:${tx >> 1}:${ty >> 1}`)
-        const [x0, y0] = dev(tx * tw, ty * tw), [x1, y1] = dev((tx + 1) * tw, (ty + 1) * tw)
-        if (par) {
-          const sub = TILE / 2
-          ctx.drawImage(par, (tx & 1) * sub, (ty & 1) * sub, sub, sub, x0, y0, x1 - x0, y1 - y0)
-          continue
-        }
-        for (let q = 0; q < 4; q++) {
-          const cx = tx * 2 + (q & 1), cy = ty * 2 + (q >> 1)
-          const kid = this.tiles.get(`${z + 1}:${cx}:${cy}`)
-          if (!kid) continue
-          const [a0, b0] = dev(cx * tw / 2, cy * tw / 2), [a1, b1] = dev((cx + 1) * tw / 2, (cy + 1) * tw / 2)
-          ctx.drawImage(kid, a0, b0, a1 - a0, b1 - b0)
-        }
-      }
-    }
-    for (const [cv, x, y, dw, dh] of have) ctx.drawImage(cv, x, y, dw, dh)
     ctx.restore()
+    if (this.log) this.log.push({ target: zt, shown: show, fading, levels: fading === null ? [show] : [show, fading] })
 
     while (this.tiles.size > this.max) {
       const first = this.tiles.keys().next().value as string
       this.release(this.tiles.get(first)!)
       this.tiles.delete(first)
     }
-    return gaps.length + baseMissing
+    return gaps > 0 || show !== zt || this.fade !== null
+  }
+
+  private paint(ctx: CanvasRenderingContext2D, cam: Camera, view: View, z: number, list: Array<[number, number]>, alpha: number) {
+    const { w, h, dpr } = view
+    const tw = TILE / Math.pow(2, z)
+    const vx0 = cam.x - w / 2 / cam.k, vy0 = cam.y - h / 2 / cam.k
+    const vx1 = cam.x + w / 2 / cam.k, vy1 = cam.y + h / 2 / cam.k
+    const dev = (wx: number, wy: number): [number, number] => [Math.round(((wx - cam.x) * cam.k + w / 2) * dpr), Math.round(((wy - cam.y) * cam.k + h / 2) * dpr)]
+    const f = TILE / tw
+    ctx.globalAlpha = alpha
+    for (const [tx, ty] of list) {
+      const cv = this.get(z, tx, ty)
+      if (!cv) continue
+      // only the part on screen, so a coarse tile blown up never asks for a vast image
+      const sx0 = Math.max(tx * tw, vx0), sy0 = Math.max(ty * tw, vy0)
+      const sx1 = Math.min((tx + 1) * tw, vx1), sy1 = Math.min((ty + 1) * tw, vy1)
+      if (sx1 <= sx0 || sy1 <= sy0) continue
+      const [d0, e0] = dev(sx0, sy0), [d1, e1] = dev(sx1, sy1)
+      if (d1 <= d0 || e1 <= e0) continue
+      ctx.drawImage(cv, (sx0 - tx * tw) * f, (sy0 - ty * tw) * f, (sx1 - sx0) * f, (sy1 - sy0) * f, d0, e0, d1 - d0, e1 - e0)
+    }
+    ctx.globalAlpha = 1
   }
 }

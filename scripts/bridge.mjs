@@ -81,6 +81,10 @@ const server = createServer(async (req, res) => {
     } else if (url.pathname === '/fs/read') {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8')
       res.end(await readFile(inside(url.searchParams.get('path') ?? ''), 'utf8'))
+    } else if (url.pathname === '/fs/raw') {
+      // bytes as they are, for images and other binary files
+      res.setHeader('Content-Type', 'application/octet-stream')
+      res.end(await readFile(inside(url.searchParams.get('path') ?? '')))
     } else if (url.pathname === '/fs/write' && req.method === 'POST') {
       const { path, content } = await body(req)
       const full = inside(path)

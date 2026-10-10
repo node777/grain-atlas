@@ -11,9 +11,14 @@ import { Folio } from './Folio'
 import { Toasts } from '@/ui/Toast'
 import { Mark } from '@/ui/Mark'
 import { Dock, CompanionButton } from './Dock'
+import { startExploreClock } from '@/voices/companion'
+import { activeVoice, voiceById } from '@/voices/voices'
 import { VersionBadge, VersionsPanel } from './Versions'
 
 let lastBackground = 'fields'
+
+/** The "Atlas by DJINN" footer bar. Off for now; the credit lives in Settings and a few quiet places. */
+const SHOW_FOOTER = false
 
 export function Shell() {
   const route = useRoute()
@@ -23,6 +28,10 @@ export function Shell() {
   const [versions, setVersions] = useState(false)
 
   useEffect(() => applyTheme(s), [s.mode, s.element, s.motion])
+  useEffect(() => startExploreClock(() => {
+    const v = voiceById(activeVoice.get().id)
+    return `Hello! I'm ${v.name}. Ask me about anything you're looking at -- or tuck me back into the header.`
+  }), [])
   useEffect(() => {
     if (!route.view) navigate(s.introSeen ? 'fields' : 'intro')
   }, [route.view])
@@ -41,7 +50,7 @@ export function Shell() {
   return (
     <div className="atlas">
       <header className="topbar">
-        <a className="wordmark" href={hrefFor('fields')} aria-label="Grain Atlas, the fields">
+        <a className="wordmark" href={hrefFor('fields')} aria-label="Grain Atlas, the fields" title="Grain Atlas, by DJINN">
           <Mark size={22} />
           <span>Grain <em>Atlas</em></span>
         </a>
@@ -76,6 +85,13 @@ export function Shell() {
           <div className="popover panel linen-fine" role="dialog" aria-label="Versions"><VersionsPanel onClose={() => setVersions(false)} /></div>
         </>
       )}
+      {SHOW_FOOTER && <footer className="atlas-foot sans">
+        <span>Grain Atlas</span>
+        <span aria-hidden>·</span>
+        <a href="https://github.com/node777/grain-atlas" target="_blank" rel="noreferrer">Atlas by <b>DJINN</b></a>
+        <span aria-hidden className="atlas-foot-extra">·</span>
+        <span className="atlas-foot-extra">reading <a href="https://github.com/grain-ww/grain" target="_blank" rel="noreferrer">grain</a></span>
+      </footer>}
       <Dock />
       <Toasts />
     </div>

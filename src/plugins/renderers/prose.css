@@ -16,7 +16,14 @@
 .prose table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .9em; display: block; overflow-x: auto; }
 .prose th, .prose td { border-bottom: 1px solid var(--rule); padding: .45em .7em; text-align: left; vertical-align: top; }
 .prose th { font-family: var(--sans); font-weight: 600; font-size: .82em; color: var(--ink-2); border-bottom: 1.5px solid var(--brass-dim); }
-.prose img { max-width: 100%; border-radius: var(--r2); }
+.prose img { max-width: 100%; height: auto; border-radius: var(--r2); vertical-align: middle; }
+.prose [align='center'] { text-align: center; }
+.prose [align='right'] { text-align: right; }
+.prose p > a > img, .prose p > img[src*='shields.io'], .prose p > a > img[src*='badge'] { border-radius: 3px; margin: 2px 1px; }
+.prose p:has(> img:only-child) { text-align: center; }
+.prose .img-missing, .img-missing { display: inline-block; font-family: var(--sans); font-size: 12px; font-style: italic; color: var(--ink-3); border: 1px dashed var(--rule); border-radius: var(--r1); padding: 1px 8px; margin: 2px; }
+.image-view { margin: 0; display: grid; gap: 8px; justify-items: center; }
+.image-view img { max-width: 100%; height: auto; border-radius: var(--r2); background: repeating-conic-gradient(color-mix(in srgb, var(--surface) 80%, transparent) 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
 .prose .field-link { border-bottom: 1px dashed var(--ink-3); color: var(--ink-2); cursor: help; }
 .prose a[href^='http']::after { content: '↗'; font-size: .7em; margin-left: .15em; color: var(--ink-3); }
 

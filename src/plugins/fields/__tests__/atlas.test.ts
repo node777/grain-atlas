@@ -40,7 +40,8 @@ const day = (d: string, n: number) =>
   Array.from({ length: n }, (_, i) => `waymarks/date/${d}/${d}-${String(10000 + i * 731).padStart(6, '0')}_note-${i}.md`)
 
 const SAMPLE = [
-  'README.md', 'LICENSE', 'flake.nix',
+  'README.md', 'LICENSE', 'flake.nix', 'docs/README.md', 'docs/guide/README.md', 'docs/guide/deep/README.md',
+  ...Array.from({ length: 8 }, (_, i) => `press/notes/20260801-${String(100000 + i * 3001)}_n${i}.md`),
   ...Array.from({ length: 30 }, (_, i) => `docs/page-${i}.md`),
   ...Array.from({ length: 40 }, (_, i) => `tools/al/witness_${i}.rish`),
   ...Array.from({ length: 12 }, (_, i) => `tools/al/run_${i}.sh`),
@@ -52,7 +53,13 @@ const SAMPLE = [
 describe('file marks', () => {
   it('names each kind of file by its extension', () => {
     expect(kindOf('docs/a.md')).toBe(Kind.House)
-    expect(kindOf('LICENSE')).toBe(Kind.House)
+    expect(kindOf('LICENSE')).toBe(Kind.Court)
+    expect(kindOf('docs/README.md')).toBe(Kind.Landmark)
+    expect(kindOf('CHANGELOG.md')).toBe(Kind.Archive)
+    expect(kindOf('waymarks/date/20260730/20260730-010834_voice.md')).toBe(Kind.Archive)
+    expect(kindOf('rye/tests/parse.rye')).toBe(Kind.Tower)
+    expect(kindOf('src/lexer.test.ts')).toBe(Kind.Tower)
+    expect(kindOf('context/specs/rules.md')).toBe(Kind.House)
     expect(kindOf('rye/x.rye')).toBe(Kind.Field)
     expect(kindOf('tools/x.rish')).toBe(Kind.Field)
     expect(kindOf('tools/x.sh')).toBe(Kind.Mill)
@@ -101,9 +108,36 @@ describe('the atlas', () => {
     }
   })
 
-  it('runs one river through a basin of dated folders, and lines its days up in time', () => {
-    expect(atlas.rivers.length).toBe(1)
-    const rv = atlas.rivers[0]
+  it('makes READMEs landmarks, grander nearer the root', () => {
+    const tierOf = (p: string) => atlas.tier[atlas.path.indexOf(p)]
+    const scaleOf = (p: string) => atlas.scale[atlas.path.indexOf(p)]
+    expect(tierOf('README.md')).toBe(0)
+    expect(tierOf('docs/README.md')).toBe(1)
+    expect(tierOf('docs/guide/README.md')).toBe(2)
+    expect(tierOf('docs/guide/deep/README.md')).toBe(3)
+    expect(scaleOf('README.md')).toBeGreaterThan(scaleOf('docs/README.md'))
+    expect(scaleOf('docs/README.md')).toBeGreaterThan(scaleOf('docs/guide/deep/README.md'))
+  })
+
+  it('rivers widen downstream with the files they pass, and lakes are not circles', () => {
+    for (const r of atlas.rivers) {
+      for (let i = 1; i < r.cum.length; i++) expect(r.cum[i]).toBeGreaterThanOrEqual(r.cum[i - 1] - 1e-6)
+      expect(r.w[r.w.length - 1]).toBeGreaterThanOrEqual(r.w[0])
+    }
+    for (const l of atlas.lakes) {
+      const rs: number[] = []
+      for (let i = 0; i < l.pts.length; i += 2) rs.push(Math.hypot(l.pts[i] - l.x, l.pts[i + 1] - l.y))
+      expect(Math.max(...rs) / Math.min(...rs)).toBeGreaterThan(1.3)
+    }
+  })
+
+  it('runs one main river through a basin of dated folders, and lines its days up in time', () => {
+    const mains = atlas.rivers.filter((r) => r.main)
+    expect(mains.length).toBe(1)
+    expect(mains[0].name).toBe('R. Waymarks')
+    // the other dated folder runs as a brook of its own
+    expect(atlas.rivers.some((r) => !r.main && r.name === 'Notes Brook')).toBe(true)
+    const rv = mains[0]
     expect(rv.pts.length / 2).toBeGreaterThan(40)
     // downstream the river widens
     expect(rv.w[rv.w.length - 1]).toBeGreaterThan(rv.w[0])
