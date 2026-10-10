@@ -10,7 +10,7 @@
 import type { Disc } from './instrument'
 import { THRONE } from './instrument'
 import { type Palette, mix, rgba } from './palette'
-import type { Depths, Tilt } from './tilt'
+import { type Depths, type Tilt, mapPoint } from './tilt'
 
 const SEG = 120
 
@@ -48,16 +48,17 @@ const HALF = (() => { const v = [LIGHT[0], LIGHT[1], LIGHT[2] + 1]; const l = Ma
 export function drawEdge(
   ctx: CanvasRenderingContext2D, d: Disc, D: Depths, t: Tilt, pal: Palette, alpha: number, ox: number, oy: number,
 ) {
-  const m = new DOMMatrix(`perspective(${D.P}px) rotateX(${t.ax}deg) rotateY(${t.ay}deg)`)
-  const r = new DOMMatrix(`rotateX(${t.ax}deg) rotateY(${t.ay}deg)`)
   const px = d.x - ox, py = d.y - oy
   const proj = (x: number, y: number, z: number): [number, number] => {
-    const w = m.m14 * x + m.m24 * y + m.m34 * z + m.m44
-    return [px + (m.m11 * x + m.m21 * y + m.m31 * z + m.m41) / w, py + (m.m12 * x + m.m22 * y + m.m32 * z + m.m42) / w]
+    const q = mapPoint(t, D.P, 0, 1, x, y, z, 1)
+    return [px + q[0] / q[2], py + q[1] / q[2]]
   }
+  const ca = Math.cos((t.ax * Math.PI) / 180), sa = Math.sin((t.ax * Math.PI) / 180)
+  const cb = Math.cos((t.ay * Math.PI) / 180), sb = Math.sin((t.ay * Math.PI) / 180)
   const shade = (nx: number, ny: number, nz: number, base: [string, string, string, string], ao: number) => {
-    // the normal in view space
-    const vx = r.m11 * nx + r.m21 * ny + r.m31 * nz, vy = r.m12 * nx + r.m22 * ny + r.m32 * nz, vz = r.m13 * nx + r.m23 * ny + r.m33 * nz
+    // the normal in view space: rotateY, then rotateX
+    const x1 = cb * nx + sb * nz, z1 = -sb * nx + cb * nz
+    const vx = x1, vy = ca * ny - sa * z1, vz = sa * ny + ca * z1
     const lam = Math.max(0, vx * LIGHT[0] + vy * LIGHT[1] + vz * LIGHT[2])
     const spec = Math.pow(Math.max(0, vx * HALF[0] + vy * HALF[1] + vz * HALF[2]), 28)
     const k = 0.25 + 0.75 * lam

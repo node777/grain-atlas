@@ -32,9 +32,36 @@ export function depths(Ro: number): Depths {
 /** A layer at depth z, scaled to cancel perspective when face-on. */
 export const layerTransform = (z: number, P: number) => `translateZ(${z.toFixed(2)}px) scale(${((P - z) / P).toFixed(6)})`
 
-/** The full transform (pin-relative) of a layer at depth z, as the browser composes it. */
-export function planeMatrix(t: Tilt, P: number, z: number): DOMMatrix {
-  return new DOMMatrix(`perspective(${P}px) rotateX(${t.ax}deg) rotateY(${t.ay}deg) ${layerTransform(z, P)}`)
+/**
+ * Map a homogeneous point (x, y, z, w), pin-relative, through what the browser composes for a
+ * layer: perspective(P) rotateX(ax) rotateY(ay) translateZ(z0) scale(s) (CSS conventions: y
+ * down, z toward the viewer). Returns (x', y', w'); the screen offset is (x'/w', y'/w').
+ */
+export function mapPoint(t: Tilt, P: number, z0: number, s: number, x: number, y: number, z: number, w: number): [number, number, number] {
+  const a = (t.ax * Math.PI) / 180, b = (t.ay * Math.PI) / 180
+  // scale, then lift to depth
+  let X = x * s, Y = y * s, Z = z + z0 * w
+  // rotateY, then rotateX
+  const X1 = Math.cos(b) * X + Math.sin(b) * Z, Z1 = -Math.sin(b) * X + Math.cos(b) * Z
+  X = X1; Z = Z1
+  const Y2 = Math.cos(a) * Y - Math.sin(a) * Z, Z2 = Math.sin(a) * Y + Math.cos(a) * Z
+  Y = Y2; Z = Z2
+  // perspective
+  return [X, Y, w - Z / P]
+}
+
+/** A layer's plane-to-screen homography (pin-relative), in DOMMatrix's field names. */
+export interface Homography { m11: number; m12: number; m14: number; m21: number; m22: number; m24: number; m41: number; m42: number; m44: number }
+export function planeMatrix(t: Tilt, P: number, z: number): Homography {
+  const s = (P - z) / P
+  const c1 = mapPoint(t, P, z, s, 1, 0, 0, 0), c2 = mapPoint(t, P, z, s, 0, 1, 0, 0), c4 = mapPoint(t, P, z, s, 0, 0, 0, 1)
+  return { m11: c1[0], m12: c1[1], m14: c1[2], m21: c2[0], m22: c2[1], m24: c2[2], m41: c4[0], m42: c4[1], m44: c4[2] }
+}
+
+/** Screen offset (pin-relative) of a point on a layer's plane: the forward map. */
+export function fromPlane(m: Homography, X: number, Y: number): [number, number] {
+  const w = m.m14 * X + m.m24 * Y + m.m44
+  return [(m.m11 * X + m.m21 * Y + m.m41) / w, (m.m12 * X + m.m22 * Y + m.m42) / w]
 }
 
 /**
@@ -42,8 +69,8 @@ export function planeMatrix(t: Tilt, P: number, z: number): DOMMatrix {
  * pin): the inverse of the layer's homography. Used to turn the rete and to pick stars on a
  * tilted instrument.
  */
-export function toPlane(m: DOMMatrix, x: number, y: number): [number, number] {
-  // (X, Y, 0, 1) -> (m11 X + m21 Y + m41, m12 X + m22 Y + m42, ., m14 X + m24 Y + m44)
+export function toPlane(m: Homography, x: number, y: number): [number, number] {
+  // (X, Y, 1) -> (m11 X + m21 Y + m41, m12 X + m22 Y + m42, m14 X + m24 Y + m44)
   const a = m.m11 - m.m14 * x, b = m.m21 - m.m24 * x, c = x * m.m44 - m.m41
   const d = m.m12 - m.m14 * y, e = m.m22 - m.m24 * y, f = y * m.m44 - m.m42
   const det = a * e - b * d

@@ -10,6 +10,7 @@
 .sky-sheen { position: absolute; border-radius: 50%; pointer-events: none; display: none; }
 /* the instrument's walls: drawn per tilt, flat behind the tilted layers */
 .sky-edge { position: absolute; display: none; pointer-events: none; }
+.sky-dial, .sky-time { user-select: none; }
 .sky-dial, .sky-time, .sky-selected { background: rgba(27, 23, 19, 0.84); border-color: #3a3027; backdrop-filter: blur(4px); color: #e9dcc0; }
 .sky-dial .faint, .sky-time .faint, .sky-selected .faint { color: #8f816b; }
 .sky-dial .chip { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; }
