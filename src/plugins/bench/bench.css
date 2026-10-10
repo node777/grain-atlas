@@ -1,0 +1,13 @@
+.bench { position: absolute; inset: 0; padding: 28px clamp(16px, 4vw, 56px) 240px; }
+.bench-head { max-width: 1100px; margin: 0 auto 20px; }
+.bench-head h1 { font-weight: 400; font-style: italic; font-size: clamp(34px, 5vw, 54px); margin: 0 0 4px; }
+.bench-grid { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 16px; align-items: start; }
+.bench-wide { max-width: 1100px; margin: 0 auto; display: grid; gap: 12px; }
+.bench-card { padding: 16px 18px; display: grid; gap: 8px; }
+.bench-card h2 { font-weight: 400; margin: 0; font-size: 22px; }
+.bench-card p { margin: 0; }
+.bench textarea { width: 100%; font-size: 13px; line-height: 1.5; resize: vertical; }
+.run-list { display: grid; gap: 8px; }
+.run-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 8px 12px; }
+.run-code { font-size: 12.5px; background: var(--sky); color: var(--star); padding: 4px 8px; border-radius: var(--r1); white-space: nowrap; overflow-x: auto; max-width: 46vw; }
+@media (max-width: 720px) { .run-row { grid-template-columns: 1fr; } }
