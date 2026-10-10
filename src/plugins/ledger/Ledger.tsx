@@ -85,7 +85,7 @@ export function Ledger({ route }: ViewProps) {
             onChange={(e) => setQuery(e.target.value)} aria-label="Search paths" style={{ width: 'min(340px, 50vw)' }}
           />
         </div>
-        <div className="scroll" style={{ flex: 1 }}>
+        <div className="ledger-scroll">
           <table className="ledger-table">
             <thead>
               <tr>{head('name', 'Name')}<th className="hide-sm">Room</th>{head('moment', 'Moment')}{head('size', 'Size')}</tr>

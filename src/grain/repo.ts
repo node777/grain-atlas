@@ -9,7 +9,7 @@ import { createStore } from '@/core/store'
 import { headSha, treeAt, commitInfo, fileText, rawUrl, type GitTreeEntry } from '@/github/client'
 import { sources, refKey, type SourceRef } from '@/sources'
 import { restoreLocalGrain, walk, readLocal, writeLocal, localHandle } from '@/sources/local'
-import { bridgeList, bridgeRead, bridgeWrite } from '@/sources/bridge'
+import { bridgeList, bridgeRead, bridgeBlob, bridgeWrite } from '@/sources/bridge'
 import { readVersion, type VersionInfo } from '@/sources/versions'
 import { parseHeader, extractLinks, benediction, type TwoRoom } from './header'
 import { parseStamp, stampFromPath, type Stamp } from './stamps'
@@ -299,26 +299,42 @@ const blobUrls = new Map<string, string>()
 /** A URL an <img> or <audio> can load for a file in the active version. */
 export async function assetUrl(path: string): Promise<string> {
   const s = repo.get()
-  if (s.origin.kind === 'github') {
-    if (/\.svg$/i.test(path)) return `https://cdn.jsdelivr.net/gh/${s.owner}/${s.repo}@${s.ref}/${path}`
-    return rawUrl(s.owner, s.repo, s.ref, path)
-  }
-  const key = `${refKey(s.origin)}:${path}`
+  const key = `${refKey(s.origin)}:${s.ref}:${path}`
   const hit = blobUrls.get(key)
   if (hit) return hit
+  if (s.origin.kind === 'github') {
+    if (!/\.svg$/i.test(path)) return rawUrl(s.owner, s.repo, s.ref, path)
+    // raw.githubusercontent serves SVG as text/plain, which an <img> refuses: fetch the text and
+    // hand the image a typed blob. jsDelivr's mirror is the fallback.
+    try {
+      const res = await fetch(rawUrl(s.owner, s.repo, s.ref, path))
+      if (!res.ok) throw new Error(String(res.status))
+      const url = URL.createObjectURL(new Blob([await res.text()], { type: 'image/svg+xml' }))
+      blobUrls.set(key, url)
+      return url
+    } catch {
+      return `https://cdn.jsdelivr.net/gh/${s.owner}/${s.repo}@${s.ref}/${path}`
+    }
+  }
   let blob: Blob
   if (s.origin.kind === 'local') {
     const h = localHandle() ?? (await restoreLocalGrain(true))
     if (!h) throw new Error('The grain folder needs permission again.')
     blob = await readLocal(h, path)
-    if (/\.svg$/i.test(path)) blob = new Blob([await blob.text()], { type: 'image/svg+xml' })
+    if (!blob.type || /\.svg$/i.test(path)) blob = new Blob([blob], { type: mimeOf(path) })
   } else {
-    blob = new Blob([await bridgeRead(path)], { type: /\.svg$/i.test(path) ? 'image/svg+xml' : 'application/octet-stream' })
+    blob = new Blob([await bridgeBlob(path)], { type: mimeOf(path) })
   }
   const url = URL.createObjectURL(blob)
   blobUrls.set(key, url)
   return url
 }
+
+const MIME: Record<string, string> = {
+  svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  avif: 'image/avif', ico: 'image/x-icon', mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', mp4: 'video/mp4', pdf: 'application/pdf',
+}
+const mimeOf = (path: string) => MIME[path.split('.').pop()?.toLowerCase() ?? ''] ?? 'application/octet-stream'
 
 const isDir = (p: string) => repo.get().entries.get(p)?.kind === 'dir'
 

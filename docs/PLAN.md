@@ -174,7 +174,8 @@ scripts/      build-stars.mjs (sky data), build-almanac.mjs (tree snapshot)
 | **Bench** | Format playground (Kyri/Brix records, one-clock stamps, page headers), run lines for every script with a copy button, notes pinned to paths with grain-style markdown export, and the plan for Rishi in the page. |
 
 Settings cover:
-- **Place:** set once from geolocation, with Ujjain as the fallback. It can also be a city or
+- **Place:** set once from geolocation, with Reno, Nevada as the default (Ujjain, the traditional
+  meridian of Jyotish, is one click away in Settings). It can also be a city or
   coordinates.
 - **Sky:** the zodiac lens (Jyotish, grain's hybrid, or Western), the ayanamsa, and the nakshatra
   count order (Ashvini or Krittika).

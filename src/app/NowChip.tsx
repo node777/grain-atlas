@@ -23,7 +23,7 @@ export function NowChip() {
     >
       <MoonGlyph elongation={q.elongation} size={16} />
       <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic' }}>{nakshatraIast(q.nakshatra)} {q.pada}</span>
-      <span className="faint">{place.name}</span>
+      <span className="faint">{place.name.split(',')[0]}</span>
     </button>
   )
 }

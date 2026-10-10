@@ -32,6 +32,11 @@ export async function bridgeRead(path: string): Promise<string> {
   return (await call(`/fs/read?path=${encodeURIComponent(path)}`)).text()
 }
 
+/** A file's bytes, for images and other binary files. */
+export async function bridgeBlob(path: string): Promise<Blob> {
+  return (await call(`/fs/raw?path=${encodeURIComponent(path)}`)).blob()
+}
+
 export async function bridgeWrite(path: string, content: string): Promise<void> {
   await call('/fs/write', { method: 'POST', body: JSON.stringify({ path, content }) })
 }

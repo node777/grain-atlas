@@ -7,7 +7,7 @@ import { rate } from '@/github/client'
 import { loadRepo } from '@/grain/repo'
 import { CITIES, nearestCity } from '@/astro/cities'
 import { AYANAMSAS } from '@/astro/ayanamsa'
-import { UJJAIN } from '@/astro/positions'
+import { UJJAIN, RENO } from '@/astro/positions'
 
 export function SettingsDrawer({ onClose }: { onClose: () => void }) {
   const s = useStore(settings)
@@ -45,12 +45,13 @@ export function SettingsDrawer({ onClose }: { onClose: () => void }) {
           <h3 style={{ margin: 0, fontWeight: 400 }}>Where the sky is cast</h3>
           <p className="muted" style={{ margin: 0, fontSize: 15 }}>
             {s.place.name} at {s.place.lat.toFixed(3)}°, {s.place.lon.toFixed(3)}°
-            {s.placeSource === 'fallback' && ' -- Ujjain, the traditional meridian of Jyotish, until you choose a place.'}
+            {(s.placeSource === 'fallback' || s.placeSource === 'unset') && ' -- the atlas casts from Reno, Nevada until you choose a place.'}
             {s.placeSource === 'geolocation' && ' -- from your browser, kept only here.'}
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="chip" onClick={useMyLocation}>Use my location</button>
-            <button className="chip" onClick={() => set({ place: UJJAIN, placeSource: 'manual' })}>Ujjain</button>
+            <button className="chip" onClick={() => set({ place: RENO, placeSource: 'manual' })}>Reno</button>
+            <button className="chip" onClick={() => set({ place: UJJAIN, placeSource: 'manual' })} title="The traditional meridian of Jyotish">Ujjain</button>
           </div>
           <label className="field">A city
             <select value={s.place.name} onChange={(e) => {

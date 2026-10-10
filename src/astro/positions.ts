@@ -18,6 +18,9 @@ export interface Place {
 }
 
 export const UJJAIN: Place = { lat: 23.1793, lon: 75.7849, name: 'Ujjain' }
+/** The atlas's default place, until the reader shares or chooses one. */
+export const RENO: Place = { lat: 39.5296, lon: -119.8138, name: 'Reno, Nevada' }
+export const DEFAULT_PLACE = RENO
 
 export interface BodyPosition {
   id: GrahaId | 'uranus' | 'neptune' | 'pluto'
