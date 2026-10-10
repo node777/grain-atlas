@@ -17,7 +17,18 @@ export interface Look {
   bob: number             // 0 still .. 1 lively
   hue: string             // body colour
   accent: string          // crown and cheeks
-  gloss?: boolean         // a soft sheen and a catchlight, for a few lit voices
+  gloss?: boolean         // a soft sheen, for a few lit voices
+  eye?: string            // the eyes' solid colour, one of EYE_TINTS
+}
+
+/** Light, solid eye colours, warm like the cloth: cream, wheat, rose, apricot, sage, lilac, peach. */
+export const EYE_TINTS = ['#fbf4e0', '#f6e6bd', '#f7ddd3', '#f4e1c4', '#e5ecd0', '#ebe0ef', '#f6d9c3', '#f2ead2'] as const
+
+/** Each name keeps the same tint wherever its face is drawn. */
+export function eyeFor(name: string): string {
+  let h = 0
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return EYE_TINTS[h % EYE_TINTS.length]
 }
 
 export interface Voice {
@@ -66,7 +77,7 @@ export function lookFromTone(tone: string[], element: ElementRow, head: Look['he
 
 const v = ({ gloss, ...x }: Omit<Voice, 'look'> & { head?: Look['head']; crown?: Look['crown']; gloss?: boolean }): Voice => ({
   ...x,
-  look: { ...lookFromTone(x.tone, x.element, x.head, x.crown), gloss },
+  look: { ...lookFromTone(x.tone, x.element, x.head, x.crown), gloss, eye: eyeFor(x.name) },
 })
 
 /**
@@ -199,7 +210,7 @@ export function lookForName(name: string): Look {
   const els: ElementRow[] = ['earth', 'water', 'fire', 'air', 'aether']
   const heads: Look['head'][] = ['round', 'seed', 'drop', 'bell', 'leaf', 'moon']
   const crowns: Look['crown'][] = ['sprout', 'star', 'ripple', 'halo', 'none', 'antenna']
-  return lookFromTone([], els[h % 5], heads[(h >> 3) % 6], crowns[(h >> 6) % 6])
+  return { ...lookFromTone([], els[h % 5], heads[(h >> 3) % 6], crowns[(h >> 6) % 6]), eye: eyeFor(name) }
 }
 export const voiceById = (id: string): Voice => allVoices().find((x) => x.id === id) ?? GRAIN_VOICES[0]
 export const voiceByName = (name: string): Voice | undefined => {
@@ -208,7 +219,7 @@ export const voiceByName = (name: string): Voice | undefined => {
 }
 
 export function seatVoice(x: Omit<Voice, 'status' | 'look'> & { look?: Look }): Voice {
-  const voice: Voice = { ...x, status: 'yours', look: x.look ?? lookFromTone(x.tone, x.element) }
+  const voice: Voice = { ...x, status: 'yours', look: { eye: eyeFor(x.name), ...(x.look ?? lookFromTone(x.tone, x.element)) } }
   userVoices.set((s) => ({ list: [...s.list.filter((u) => u.id !== voice.id), voice] }))
   return voice
 }

@@ -3,6 +3,7 @@ import type { Entry } from '@/grain/repo'
 import { layoutWorld } from '../layout'
 import { buildAtlas, CELL } from '../atlas'
 import { Kind, kindOf } from '../glyphs'
+import { WaterIndex } from '../water'
 
 /** A minimal tree of entries from file paths (dirs first, then by name, as the repo model sorts). */
 function tree(paths: string[]): Map<string, Entry> {
@@ -97,7 +98,7 @@ describe('the atlas', () => {
   it('never stacks two marks of one settlement on the same plot', () => {
     const byPlot = new Map<string, number[]>()
     for (let i = 0; i < atlas.n; i++) {
-      const k = atlas.glyphPlot[i].path
+      const k = atlas.plot[i].path
       byPlot.set(k, [...(byPlot.get(k) ?? []), i])
     }
     for (const ids of byPlot.values()) {
@@ -121,13 +122,28 @@ describe('the atlas', () => {
 
   it('rivers widen downstream with the files they pass, and lakes are not circles', () => {
     for (const r of atlas.rivers) {
-      for (let i = 1; i < r.cum.length; i++) expect(r.cum[i]).toBeGreaterThanOrEqual(r.cum[i - 1] - 1e-6)
-      expect(r.w[r.w.length - 1]).toBeGreaterThanOrEqual(r.w[0])
+      for (let i = 1; i < r.w.length; i++) expect(r.w[i]).toBeGreaterThanOrEqual(r.w[i - 1] - 1e-6)
+      expect(r.w[r.w.length - 1]).toBeGreaterThan(r.w[0])
     }
     for (const l of atlas.lakes) {
       const rs: number[] = []
       for (let i = 0; i < l.pts.length; i += 2) rs.push(Math.hypot(l.pts[i] - l.x, l.pts[i + 1] - l.y))
       expect(Math.max(...rs) / Math.min(...rs)).toBeGreaterThan(1.3)
+    }
+  })
+
+  it('draws no file mark on the water', () => {
+    const water = new WaterIndex(atlas.rivers, atlas.lakes)
+    for (let i = 0; i < atlas.n; i++) expect(water.at(atlas.gx[i], atlas.gy[i], CELL * 0.45 * atlas.scale[i])).toBeNull()
+  })
+
+  it('outlines each river as one closed channel, its banks a river width apart', () => {
+    for (const r of atlas.rivers) {
+      const n = r.pts.length / 2
+      expect(r.channel.length).toBe(n * 4)
+      const mid = Math.floor(n / 2), across = 2 * n - 1 - mid
+      const bank = Math.hypot(r.channel[mid * 2] - r.channel[across * 2], r.channel[mid * 2 + 1] - r.channel[across * 2 + 1])
+      expect(bank).toBeCloseTo(r.w[mid], 3)
     }
   })
 

@@ -4,7 +4,7 @@
 // carry a sheen and a catchlight. Still motion leaves it calm and open-eyed.
 
 import { useEffect, useRef, useState } from 'react'
-import type { Look } from './voices'
+import { EYE_TINTS, type Look } from './voices'
 import { prefersStill } from '@/core/settings'
 
 interface Props {
@@ -48,16 +48,6 @@ function Crown({ kind, color }: { kind: Look['crown']; color: string }) {
 
 /** One ink for every line, warm enough to sit on Stone and on Hearth. */
 const INK = '#34291f'
-
-/** A colour pushed most of the way to warm white: the eye of a voice keeps a breath of its dye. */
-function brighten(hex: string, t: number): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex)
-  if (!m) return '#fdf9ee'
-  const n = parseInt(m[1], 16)
-  const mix = (c: number, w: number) => Math.round(c + (w - c) * t)
-  const r = mix((n >> 16) & 255, 255), g = mix((n >> 8) & 255, 252), b = mix(n & 255, 242)
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
-}
 
 export function Character({ look, size = 72, speaking, thinking, mood = 'idle', title }: Props) {
   const ref = useRef<SVGSVGElement>(null)
@@ -112,7 +102,7 @@ export function Character({ look, size = 72, speaking, thinking, mood = 'idle', 
   const eyeY = 56 + (ryOpen - ry) * 0.5
   const gx = thinking ? 2 : gaze.x, gy = thinking ? -2 : gaze.y
   const mouthY = 73
-  const white = brighten(look.hue, 0.86)
+  const eye = look.eye ?? EYE_TINTS[0]
   const curve = smile * 5
   const open = mouthOpen * 4.5
 
@@ -132,16 +122,12 @@ export function Character({ look, size = 72, speaking, thinking, mood = 'idle', 
         <path d={HEADS[look.head]} fill={look.hue} stroke={INK} strokeWidth="2.2" strokeLinejoin="round" />
         {look.gloss && <ellipse cx="34" cy="31" rx="11" ry="6" transform="rotate(-24 34 31)" fill="#fff8ea" opacity="0.3" />}
         {look.cheeks && <g fill={look.accent} opacity="0.28"><circle cx="24" cy="69" r="5.5" /><circle cx="76" cy="69" r="5.5" /></g>}
-        {/* eyes: bright, nearly white, tinted with the voice's own dye; a small ink pupil glances */}
-        {[35, 65].map((cx) => blink
-          ? <path key={cx} d={`M${cx - rx} ${eyeY} Q${cx} ${eyeY + 3} ${cx + rx} ${eyeY}`} stroke={INK} strokeWidth="2.4" fill="none" strokeLinecap="round" />
-          : (
-            <g key={cx}>
-              <ellipse cx={cx} cy={eyeY} rx={rx} ry={ry} fill={white} stroke={INK} strokeWidth="2" />
-              <ellipse cx={cx + gx * 1.15} cy={eyeY + gy * 1.1 + ry * 0.08} rx={rx * 0.46} ry={Math.min(ry * 0.6, rx * 0.52)} fill={INK} />
-              {look.gloss && <circle cx={cx + gx * 1.15 - rx * 0.16} cy={eyeY + gy * 1.1 - ry * 0.1} r={r * 0.15} fill="#fffdf6" />}
-            </g>
-          ))}
+        {/* eyes: big, solid and light, each voice's its own pale tint; they glance toward the pointer */}
+        <g transform={`translate(${gx} ${gy})`}>
+          {[35, 65].map((cx) => blink
+            ? <path key={cx} d={`M${cx - rx} ${eyeY} Q${cx} ${eyeY + 3} ${cx + rx} ${eyeY}`} stroke={INK} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+            : <ellipse key={cx} cx={cx} cy={eyeY} rx={rx} ry={ry} fill={eye} stroke={INK} strokeWidth="2" />)}
+        </g>
         {/* mouth */}
         {open > 0.5
           ? <ellipse cx="50" cy={mouthY + 1} rx="4.6" ry={open * 0.7 + 1.2} fill={INK} />

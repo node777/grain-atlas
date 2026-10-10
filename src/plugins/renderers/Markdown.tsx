@@ -75,6 +75,20 @@ const rawGithub = (u: string) => u.replace(/^https:\/\/github\.com\/([^/]+)\/([^
  * active version (GitHub, a local folder or the bridge), and relative links stay in the atlas.
  * A picture that cannot load shows its words in a small frame instead of a broken icon.
  */
+/**
+ * A picture standing alone in its paragraph gets its words beneath it, as GitHub shows a title on
+ * hover: some of grain's pictures are deliberately dark (its logo is a charcoal band on black),
+ * and the caption says so.
+ */
+function captionIfAlone(img: HTMLImageElement): void {
+  const p = img.parentElement
+  if (!img.alt || !p || img.closest('a') || p.textContent?.trim() || p.querySelectorAll('img').length > 1) return
+  const cap = document.createElement('span')
+  cap.className = 'img-caption'
+  cap.textContent = img.alt
+  img.after(cap)
+}
+
 function fixMedia(root: HTMLElement, path: string): void {
   const entries = repo.get().entries
   for (const img of root.querySelectorAll<HTMLImageElement>('img')) {
@@ -89,6 +103,7 @@ function fixMedia(root: HTMLElement, path: string): void {
       span.title = `${img.getAttribute('src') ?? ''} could not be loaded`
       img.replaceWith(span)
     }, { once: true })
+    captionIfAlone(img)
     const parked = img.dataset.src
     const src = parked ?? img.getAttribute('src') ?? ''
     if (!src) continue
@@ -248,6 +263,7 @@ export function Code({ path, text }: FileContext) {
 export function ImageView({ path, text }: FileContext) {
   // SVG draws from its own text; anything else loads from the active version (GitHub, folder, bridge).
   const svg = path.toLowerCase().endsWith('.svg') && text ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}` : ''
+  const about = svg ? svgAbout(text) : ''
   const [src, setSrc] = useState(svg)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
@@ -261,7 +277,14 @@ export function ImageView({ path, text }: FileContext) {
   return (
     <figure className="image-view">
       {src && <img src={src} alt={path} onError={() => setFailed(true)} />}
-      <figcaption className="faint sans">{path.split('/').pop()}</figcaption>
+      <figcaption className="faint sans">{about || path.split('/').pop()}</figcaption>
     </figure>
   )
+}
+
+/** An SVG's own words for itself: its aria-label, else its <title>. */
+function svgAbout(text: string): string {
+  const head = text.slice(0, 4000)
+  const m = /aria-label="([^"]+)"/.exec(head) ?? /<title>([^<]+)<\/title>/.exec(head)
+  return m ? m[1].trim() : ''
 }
