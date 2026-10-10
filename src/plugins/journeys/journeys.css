@@ -12,11 +12,11 @@
 .journey-stops { margin: 0; padding-left: 20px; font-size: 15px; }
 .journey-stops li { margin: 3px 0; }
 .journey-stops li a { color: var(--ink); text-decoration: none; }
-.journey-stops li a:hover { color: var(--gold); }
-.journey-stops li.read::marker { color: var(--gold); }
+.journey-stops li a:hover { color: var(--gold-ink); }
+.journey-stops li.read::marker { color: var(--gold-ink); }
 .journey-stops li.read a { color: var(--ink-2); }
 .journey-stops code { display: block; font-size: 11.5px; color: var(--ink-3); }
 .journey-go { align-self: flex-start; border-color: var(--invite); color: var(--invite); margin-top: auto; }
-.benediction { margin: auto 0 0; font-style: italic; color: var(--gold); }
+.benediction { margin: auto 0 0; font-style: italic; color: var(--gold-ink); }
 .journeys-guide { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
 .guide-bubble { padding: 10px 14px; max-width: 52ch; border-radius: var(--r3) var(--r3) var(--r3) var(--r1); font-size: 16px; }

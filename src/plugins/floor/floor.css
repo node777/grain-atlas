@@ -16,7 +16,7 @@
 .voice-roster { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .voice-pick { display: grid; justify-items: center; gap: 2px; background: none; border: 1px solid transparent; border-radius: var(--r2); padding: 4px 2px; cursor: pointer; font-family: var(--sans); font-size: 11px; color: var(--ink-2); }
 .voice-pick:hover { border-color: var(--rule); }
-.voice-pick.on { border-color: var(--brass); color: var(--gold); background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.voice-pick.on { border-color: var(--brass); color: var(--gold-ink); background: color-mix(in srgb, var(--surface) 60%, transparent); }
 .thread-list { display: grid; gap: 4px; overflow: auto; align-content: start; }
 .thread-row { display: flex; align-items: center; border-radius: var(--r2); }
 .thread-row > button:first-child { flex: 1; display: grid; text-align: left; background: none; border: none; padding: 6px 8px; cursor: pointer; border-radius: var(--r2); min-width: 0; }
@@ -40,7 +40,7 @@
 .turn-bubble { max-width: 72%; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r3) var(--r3) var(--r1) var(--r3); padding: 8px 12px; white-space: pre-wrap; }
 .turn-voice { display: flex; gap: 10px; align-items: flex-start; }
 .turn-body { min-width: 0; flex: 1; }
-.turn-who { font-size: 12.5px; color: var(--gold); margin-bottom: 2px; }
+.turn-who { font-size: 12.5px; color: var(--gold-ink); margin-bottom: 2px; }
 .turn-prose { font-size: 16px; max-width: 74ch; }
 .turn-prose p { margin: 0 0 .6em; }
 .turn-notice { border-left: 3px solid var(--brass-dim); padding-left: 12px; color: var(--ink-2); font-style: italic; }
@@ -71,7 +71,7 @@
 .furrows { display: grid; gap: 4px; }
 .furrow { border-bottom: 1px dashed var(--rule); }
 .furrow-row { display: flex; gap: 12px; align-items: flex-end; width: 100%; background: none; border: none; padding: 4px 0; cursor: pointer; color: inherit; font: inherit; }
-.furrow.grown .furrow-row > div > div:first-child { color: var(--gold); }
+.furrow.grown .furrow-row > div > div:first-child { color: var(--gold-ink); }
 .furrow.withered { opacity: .7; }
 .furrow.growing .furrow-stalk { animation: stalk-sway 2.4s ease-in-out infinite; transform-origin: 17px 54px; }
 @keyframes stalk-sway { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
