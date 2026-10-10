@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useStore } from '@/core/store'
 import { hrefFor } from '@/core/router'
 import type { ElementRow } from '@/core/settings'
-import { GRAIN_VOICES, userVoices, seatVoice, releaseVoice, activeVoice, lookFromTone, type Look, type Voice } from '@/voices/voices'
+import { GRAIN_VOICES, userVoices, seatVoice, releaseVoice, activeVoice, lookFromTone, eyeFor, type Look, type Voice } from '@/voices/voices'
 import { Character } from '@/voices/Character'
 
 const HEADS: Look['head'][] = ['round', 'seed', 'drop', 'bell', 'leaf', 'moon']
@@ -22,7 +22,7 @@ export function VoicesPanel() {
   const [crown, setCrown] = useState<Look['crown']>('sprout')
   const [persona, setPersona] = useState('')
   const toneList = tone.split(',').map((x) => x.trim()).filter(Boolean)
-  const look = useMemo(() => lookFromTone(toneList, element, head, crown), [tone, element, head, crown])
+  const look = useMemo(() => ({ ...lookFromTone(toneList, element, head, crown), eye: eyeFor(name || 'a new voice') }), [tone, element, head, crown, name])
 
   const seat = () => {
     const id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')

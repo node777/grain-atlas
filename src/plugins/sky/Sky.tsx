@@ -73,7 +73,7 @@ export function Sky({ route }: ViewProps) {
   const initial = route.params.t ? new Date(route.params.t) : new Date()
   const [date, setDate] = useState<Date>(isNaN(initial.getTime()) ? new Date() : initial)
   const [speed, setSpeed] = useState(0)
-  const [mode, setMode] = useState<'astrolabe' | 'dome'>(route.params.mode === 'dome' ? 'dome' : 'astrolabe')
+  const [mode, setMode] = useState<'astrolabe' | 'dome'>(route.params.mode === 'astrolabe' ? 'astrolabe' : 'dome')  // inside the sky by default
   const [instrument, setInstrument] = useState(1)
   const [culture, setCulture] = useState<CultureId>('indian')
   const [figures, setFigures] = useState(true)
@@ -82,7 +82,7 @@ export function Sky({ route }: ViewProps) {
   const [selected, setSelected] = useState<{ kind: 'star' | 'body'; id: number | string } | null>(null)
   const [panel, setPanel] = useState(true)
 
-  const [depth, setDepth] = useState(true)   // the instrument seen as an object, three-quarter on
+  const [depth, setDepth] = useState(false)  // the instrument seen as an object, three-quarter on; flat by default
 
   const stage = useRef<HTMLDivElement>(null)
   const obj = useRef<HTMLDivElement>(null)
@@ -102,9 +102,9 @@ export function Sky({ route }: ViewProps) {
   const blend = useRef(mode === 'astrolabe' ? 1 : 0)
   const flight = useRef<{ from: Cam; to: Cam; b0: number; b1: number; t0: number; tFrom: Tilt; tTo: Tilt } | null>(null)
   // the instrument's tilt, and its gentle return to rest after you let it go
-  const rest = useRef<Tilt>(REST_3D)
+  const rest = useRef<Tilt>(FACE_ON)
   rest.current = depth ? REST_3D : FACE_ON
-  const tilt = useRef<Tilt>(mode === 'astrolabe' ? REST_3D : FACE_ON)
+  const tilt = useRef<Tilt>(FACE_ON)
   const tiltAnim = useRef<{ from: Tilt; to: Tilt; t0: number; dur: number } | null>(null)
   const applied = useRef<{ key: string; geo: string; tilt: Tilt; op: number }>({ key: '', geo: '', tilt: FACE_ON, op: -1 })
   // The moment the canvas shows. It runs ahead of React's `date` while dragging or while time
