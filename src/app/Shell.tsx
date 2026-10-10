@@ -17,6 +17,9 @@ import { VersionBadge, VersionsPanel } from './Versions'
 
 let lastBackground = 'fields'
 
+/** The "Atlas by DJINN" footer bar. Off for now; the credit lives in Settings and a few quiet places. */
+const SHOW_FOOTER = false
+
 export function Shell() {
   const route = useRoute()
   const s = useStore(settings)
@@ -47,7 +50,7 @@ export function Shell() {
   return (
     <div className="atlas">
       <header className="topbar">
-        <a className="wordmark" href={hrefFor('fields')} aria-label="Grain Atlas, the fields">
+        <a className="wordmark" href={hrefFor('fields')} aria-label="Grain Atlas, the fields" title="Grain Atlas, by DJINN">
           <Mark size={22} />
           <span>Grain <em>Atlas</em></span>
         </a>
@@ -82,13 +85,13 @@ export function Shell() {
           <div className="popover panel linen-fine" role="dialog" aria-label="Versions"><VersionsPanel onClose={() => setVersions(false)} /></div>
         </>
       )}
-      <footer className="atlas-foot sans">
+      {SHOW_FOOTER && <footer className="atlas-foot sans">
         <span>Grain Atlas</span>
         <span aria-hidden>·</span>
         <a href="https://github.com/node777/grain-atlas" target="_blank" rel="noreferrer">Atlas by <b>DJINN</b></a>
         <span aria-hidden className="atlas-foot-extra">·</span>
         <span className="atlas-foot-extra">reading <a href="https://github.com/grain-ww/grain" target="_blank" rel="noreferrer">grain</a></span>
-      </footer>
+      </footer>}
       <Dock />
       <Toasts />
     </div>

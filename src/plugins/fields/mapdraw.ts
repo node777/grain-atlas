@@ -15,7 +15,7 @@ import { journeyById } from '@/grain/quests'
 import { prefersStill } from '@/core/settings'
 import type { Plot, World } from './layout'
 import {
-  K, OX, OY, W, H, board, fogPattern, beginFrame, drawSeeds, drawPulse, drawRoad, regionTitle, type Geo, type Scene,
+  K, OX, OY, W, H, board, beginFrame, drawSeeds, drawPulse, drawRoad, regionTitle, type Geo, type Scene,
 } from './draw'
 import { textWidth, fontAt } from './labels'
 import { type Atlas, CELL, coastReach, zoneClear, elevAt, ih, vnoise } from './atlas'
@@ -122,7 +122,7 @@ export class MapRenderer {
     const at = this.atlas!
     const g = elevAt(at, x, y)
     if (!g) return null
-    const z = zoneClear(at, x, y, Math.min(240, reach))
+    const z = zoneClear(at, x, y, Math.min(160, reach))
     if (z < 0) return null
     return { e: g.e, clear: Math.min(g.clear, z) }
   }
@@ -369,7 +369,7 @@ export class MapRenderer {
           for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
             const h1 = ih(i, j, o + pass * 50), h2 = ih(j, i, o + 77 + pass * 50)
             const wx = (i + 0.12 + 0.76 * h1) * S, wy = (j + 0.12 + 0.76 * h2) * S
-            const gr = this.ground(wx, wy, S * 1.2)
+            const gr = this.ground(wx, wy, S * 0.65)
             if (!gr) continue
             const h3 = ih(i + 31, j - 17, o + pass * 50)
             if (pass === 0) {
@@ -478,14 +478,14 @@ export class MapRenderer {
     beginFrame(ctx, a, world, sc)
     const C = sc.C, I = this.I
     if (prefs.sea) this.rhumbs(ctx, at, C)
-    if (this.tiles.draw(ctx, a.camera.current, a.size.current, at.bounds, this.renderTile, 6, prefersStill())) a.redraw()
+    if (this.tiles.draw(ctx, a.camera.current, a.size.current, at.bounds, this.renderTile, 4, prefersStill())) a.redraw()
     const dbg = (globalThis as { __fieldsTiles?: TileFrame[] }).__fieldsTiles
     this.tiles.log = Array.isArray(dbg) ? dbg : null
     if (prefs.sea) {
       this.rose(ctx, at, world, C, I)
       this.cartouche(ctx, at, world, I, stats)
     }
-    if (sc.mist !== false) for (const land of world.regions) for (const room of land.rooms) this.mist(ctx, room, sc)
+    if (sc.mist !== false) this.drawMist(ctx, world, sc)
     drawSeeds(ctx, at.index, sc)
     if (sc.hovered && sc.pulse >= 0) drawPulse(ctx, mx(sc.hovered), my(sc.hovered), sc.hovered.r, sc)
     if (sc.selected) {
@@ -513,24 +513,50 @@ export class MapRenderer {
     if (prefs.names !== 'none') this.names(ctx, world, geo, at, sc, prefs, hoverGlyph)
   }
 
-  /** Mist over an unwalked room, as cloud only, its edge feathered so no circle shows. */
-  private mist(ctx: CanvasRenderingContext2D, room: Plot, sc: Scene) {
-    const pat = fogPattern
-    if (!pat || sc.discovered.has(room.path)) return
-    const x = mx(room) * K + OX, y = my(room) * K + OY, R = room.r * K
-    if (R < 3 || x + R < 0 || x - R > W || y + R < 0 || y - R > H) return
+  /** Mist over the unwalked rooms, as cloud only, each edge feathered so no circle shows. The
+   *  cloud is soft, so it is painted at a quarter of the screen's resolution and laid over the
+   *  map in one scaled copy: a sixteenth of the pixels to fill, every frame. */
+  private mistCv: HTMLCanvasElement | null = null
+  private mistPat: { src: HTMLCanvasElement; pat: CanvasPattern } | null = null
+  private drawMist(ctx: CanvasRenderingContext2D, world: World, sc: Scene) {
+    if (!sc.fog) return
+    const Q = 4
     const near = Math.min(W, H)
-    const thin = Math.min(1, Math.max(0, (1.5 * near - R) / (0.8 * near)))
-    const peek = sc.hovered && (sc.hovered.path === room.path || sc.hovered.path.startsWith(room.path + '/')) ? 0.5 : 1
-    const a = thin * peek * (sc.stone ? 0.6 : 0.5)
-    if (a <= 0.01) return
-    ctx.save()
-    ctx.fillStyle = pat
-    const N = 6
-    for (let i = 0; i < N; i++) {
-      ctx.globalAlpha = a / N * 1.6
-      ctx.beginPath(); ctx.arc(x, y, R * (1.08 - i * 0.07), 0, Math.PI * 2); ctx.fill()
+    const rooms: Array<[number, number, number, number]> = []
+    for (const land of world.regions) for (const room of land.rooms) {
+      if (sc.discovered.has(room.path)) continue
+      const x = mx(room) * K + OX, y = my(room) * K + OY, R = room.r * K
+      if (R < 3 || x + R * 1.1 < 0 || x - R * 1.1 > W || y + R * 1.1 < 0 || y - R * 1.1 > H) continue
+      const thin = Math.min(1, Math.max(0, (1.5 * near - R) / (0.8 * near)))
+      const peek = sc.hovered && (sc.hovered.path === room.path || sc.hovered.path.startsWith(room.path + '/')) ? 0.5 : 1
+      const a = thin * peek * (sc.stone ? 0.6 : 0.5)
+      if (a > 0.01) rooms.push([x, y, R, a])
     }
+    if (!rooms.length) return
+    const w = Math.ceil(W / Q), h = Math.ceil(H / Q)
+    const cv = this.mistCv ?? (this.mistCv = document.createElement('canvas'))
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h }
+    const g = cv.getContext('2d')!
+    if (!this.mistPat || this.mistPat.src !== sc.fog) this.mistPat = { src: sc.fog, pat: g.createPattern(sc.fog, 'repeat')! }
+    const pat = this.mistPat.pat
+    // the same stretch of cloud as at full size, fixed to the land so it travels with the map
+    const t = (world.radius * 0.22 * K) / 256 / Q
+    pat.setTransform(new DOMMatrix([t, 0, 0, t, OX / Q, OY / Q]))
+    g.setTransform(1, 0, 0, 1, 0, 0)
+    g.clearRect(0, 0, w, h)
+    g.fillStyle = pat
+    const N = 6
+    for (const [x, y, R, a] of rooms) {
+      for (let i = 0; i < N; i++) {
+        g.globalAlpha = (a / N) * 1.6
+        g.beginPath(); g.arc(x / Q, y / Q, (R * (1.08 - i * 0.07)) / Q, 0, Math.PI * 2); g.fill()
+      }
+    }
+    g.globalAlpha = 1
+    ctx.save()
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'low'
+    ctx.drawImage(cv, 0, 0, w * Q, h * Q)
     ctx.restore()
   }
 

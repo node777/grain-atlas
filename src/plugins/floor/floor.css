@@ -4,6 +4,7 @@
 .floor-head p { margin: 2px 0 0; }
 .floor-meta { display: grid; gap: 2px; font-size: 12.5px; color: var(--ink-2); text-align: right; align-content: end; }
 .floor-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px clamp(16px, 3vw, 40px); border-bottom: 1px solid var(--rule); }
+.floor-by { font-style: italic; font-family: var(--serif); color: var(--ink-3); font-size: 12px; letter-spacing: .02em; }
 .floor-hint { margin: 10px clamp(16px, 3vw, 40px) 0; padding: 10px 14px; }
 .floor-body { flex: 1; overflow: auto; overflow-x: hidden; padding: 16px clamp(16px, 3vw, 40px) 120px; }
 .chip.go { border-color: var(--invite); color: var(--invite); justify-self: start; }

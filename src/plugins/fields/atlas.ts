@@ -590,8 +590,8 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
 
   const lakes: Lake[] = []
   /** Where water pools: the lowest open ground ahead, with room for a lake of radius r. */
-  const poolOf = (x: number, y: number, ux: number, uy: number, r: number, key: string): { x: number; y: number; r: number } => {
-    let best = { x: x + ux * r * 2, y: y + uy * r * 2, r: r * 0.5 }, be = Infinity
+  const poolOf = (x: number, y: number, ux: number, uy: number, r: number, key: string): { x: number; y: number; r: number } | null => {
+    let best: { x: number; y: number; r: number } | null = null, be = Infinity
     const ahead = Math.atan2(uy, ux)
     for (let i = 0; i < 24; i++) {
       const a = ahead + (hash(`${key}:p${i}`) - 0.5) * 2.2, dist = r * (1.8 + hash(`${key}:q${i}`) * 2.4)
@@ -600,7 +600,7 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
       if (!g) continue
       const room = Math.min(clearAt(px, py, r * 2.5), g.clear)
       // the shore reaches about twice the radius at its longest lobe: keep all of it on land
-      if (room < r) continue
+      if (room < Math.max(r * 0.75, CELL * 3)) continue
       const score = g.e - Math.min(room, 2 * r) / r * 0.3
       if (score < be) { be = score; best = { x: px, y: py, r: Math.min(r, room * 0.5) } }
     }
@@ -670,15 +670,16 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
     const ex = c.pts[c.pts.length - 2], ey = c.pts[c.pts.length - 1], cumEnd = c.cum[c.cum.length - 1]
     const [qx, qy] = nearestOn(coastPts[li], ex, ey)
     const land = world.regions[li]
-    // the sea near enough: run down to it; otherwise the water pools inland
-    if (Math.hypot(qx - ex, qy - ey) < land.r * 0.4) {
+    // the sea near enough: run down to it; otherwise the water pools inland, where there is a
+    // hollow with room for it (and runs on to the sea after all where there is none)
+    const r = CELL * (2.2 + Math.sqrt(cumEnd) * 0.2)
+    const site = Math.hypot(qx - ex, qy - ey) < land.r * 0.4 ? null : poolOf(ex, ey, ux, uy, r, key)
+    if (!site) {
       const ox = qx - land.x, oy = qy - land.y, ol = Math.hypot(ox, oy) || 1
       add(c, trace(ex, ey, qx + (ox / ol) * CELL * 0.6, qy + (oy / ol) * CELL * 0.6, key), cumEnd, cumEnd, true)
       return
     }
-    const r = CELL * (2.2 + Math.sqrt(cumEnd) * 0.2)
-    const site = poolOf(ex, ey, ux, uy, r, key)
-    const lake = makeLake(site.x, site.y, Math.max(CELL * 1.4, site.r), Math.atan2(site.y - ey, site.x - ex), key + ':lake', lakeName)
+    const lake = makeLake(site.x, site.y, site.r, Math.atan2(site.y - ey, site.x - ex), key + ':lake', lakeName)
     const [sx, sy] = shoreOf(lake, ex, ey)
     add(c, trace(ex, ey, sx, sy, key), cumEnd, cumEnd, true)
   }
@@ -916,7 +917,7 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
 
   const glyphs = new Grid(CELL * 4)
   for (let i = 0; i < total; i++) glyphs.add(i, gx[i], gy[i], gx[i], gy[i])
-  const zones = new Grid(64)
+  const zones = new Grid(40)
   capsules.forEach((c, i) => zones.add(i, Math.min(c.ax, c.bx) - c.r, Math.min(c.ay, c.by) - c.r, Math.max(c.ax, c.bx) + c.r, Math.max(c.ay, c.by) + c.r))
 
   // ---- bounds, and the two corners of open sea for the rose and the cartouche
@@ -939,7 +940,11 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
 export function zoneClear(at: Atlas, x: number, y: number, reach: number): number {
   let best = reach
   at.zones.each(x - reach, y - reach, x + reach, y + reach, (id) => {
+    if (best < 0) return
     const c = at.capsules[id]
+    // cheap reject: the capsule's box is further off than the best so far
+    if (Math.min(c.ax, c.bx) - c.r - x > best || x - Math.max(c.ax, c.bx) - c.r > best ||
+      Math.min(c.ay, c.by) - c.r - y > best || y - Math.max(c.ay, c.by) - c.r > best) return
     const dx = c.bx - c.ax, dy = c.by - c.ay
     const l2 = dx * dx + dy * dy
     const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - c.ax) * dx + (y - c.ay) * dy) / l2)) : 0

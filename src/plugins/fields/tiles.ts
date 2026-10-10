@@ -51,7 +51,11 @@ export class TileCache {
 
   private release(c: HTMLCanvasElement) { if (this.pool.length < 64) this.pool.push(c) }
 
+  /** A running estimate of what one tile costs, so a frame does not start one it cannot finish. */
+  private cost = 3
+
   private make(render: TileRender, z: number, tx: number, ty: number): HTMLCanvasElement {
+    const q0 = performance.now()
     const c = this.pool.pop() ?? document.createElement('canvas')
     if (c.width !== TILE) { c.width = TILE; c.height = TILE }
     // a CPU-backed canvas, read back one pixel once drawn: canvases record their drawing and
@@ -65,6 +69,7 @@ export class TileCache {
     render(g, tx * tw, ty * tw, Math.pow(2, z))
     g.restore()
     g.getImageData(0, 0, 1, 1)
+    this.cost = this.cost * 0.8 + (performance.now() - q0) * 0.2
     return c
   }
 
@@ -100,7 +105,16 @@ export class TileCache {
     if (zb !== this.baseZ) { for (const c of this.base.values()) this.release(c); this.base.clear(); this.baseZ = zb }
     const vx0 = cam.x - w / 2 / cam.k, vy0 = cam.y - h / 2 / cam.k
     const vx1 = cam.x + w / 2 / cam.k, vy1 = cam.y + h / 2 / cam.k
-    const budget = () => performance.now() - t0 < budgetMs
+    // room for another tile: within the budget even counting what a tile usually costs (the
+    // first of a frame may always start, else a run of heavy tiles would never be made)
+    let made = 0
+    const budget = () => {
+      const el = performance.now() - t0
+      if (made > 0 && el + this.cost > budgetMs) return false
+      if (el >= budgetMs) return false
+      made++
+      return true
+    }
 
     // 1. the overview, whole, before anything else (it is small, and it is the last resort)
     for (const [tx, ty] of this.span(zb, world.x0, world.y0, world.x1, world.y1)) {

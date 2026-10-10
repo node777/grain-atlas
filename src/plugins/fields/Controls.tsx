@@ -59,9 +59,21 @@ const KEY_ORDER = [Kind.Landmark, Kind.House, Kind.Archive, Kind.Court, Kind.For
 const drawRange = (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => { mountain(g, 9, 18, 7, 0.3, I, 1); mountain(g, 17, 19, 6, 0.7, I, 1) }
 const drawWood = (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => { tree(g, 8, 10, 4.5, I); tree(g, 17, 9, 4, I); tree(g, 13, 14, 4.5, I) }
 const drawRiver = (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => {
-  g.beginPath(); g.moveTo(2, 15); g.bezierCurveTo(8, 4, 15, 20, 24, 8)
-  g.lineWidth = 4.2; g.strokeStyle = I.ink; g.stroke(); g.lineWidth = 2.2; g.strokeStyle = I.sea; g.stroke()
+  // a stream that rises thin and widens: banks in ink, water between
+  g.lineCap = 'round'
+  const seg = [[2, 17, 4, 14], [4, 14, 8, 9], [8, 9, 13, 10], [13, 10, 18, 13], [18, 13, 24, 9]] as const
+  seg.forEach(([a, b, c, d], i) => { g.beginPath(); g.moveTo(a, b); g.lineTo(c, d); g.lineWidth = 0.9 + i * 0.7 + (i > 1 ? 2 : 0); g.strokeStyle = I.ink; g.stroke() })
+  seg.forEach(([a, b, c, d], i) => { if (i < 2) return; g.beginPath(); g.moveTo(a, b); g.lineTo(c, d); g.lineWidth = 0.9 + i * 0.7; g.strokeStyle = I.sea; g.stroke() })
 }
+const drawLake = (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => {
+  g.beginPath()
+  const pts = [[4, 11], [7, 6], [13, 5], [16, 8], [21, 6], [24, 11], [20, 16], [13, 17], [8, 16]]
+  pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)))
+  g.closePath()
+  g.fillStyle = I.sea; g.fill(); g.lineWidth = 1; g.strokeStyle = I.ink; g.stroke()
+  g.beginPath(); g.ellipse(14, 11, 6, 3, 0, 0, Math.PI * 2); g.globalAlpha = 0.4; g.lineWidth = 0.6; g.stroke(); g.globalAlpha = 1
+}
+
 
 export function FieldsControls({ C, stone }: { C: Record<string, string>; stone: boolean }) {
   const p = useStore(fieldsPrefs)
@@ -108,7 +120,8 @@ export function FieldsControls({ C, stone }: { C: Record<string, string>; stone:
                 {KEY_ORDER.map((i) => (
                   <li key={KIND_INFO[i].name}><KeyMark draw={KIND_DRAW[i]} C={C} stone={stone} /><span><b>{KIND_INFO[i].name}</b> {KIND_INFO[i].means}</span></li>
                 ))}
-                <li><KeyMark draw={drawRiver} C={C} stone={stone} /><span><b>river</b> a run of dated files, flowing by time</span></li>
+                <li><KeyMark draw={drawRiver} C={C} stone={stone} /><span><b>river</b> a run of dated files, flowing by time from a spring in the hills, wider for every file it passes</span></li>
+                <li><KeyMark draw={drawLake} C={C} stone={stone} /><span><b>lake</b> where a river cannot reach the sea; a tarn where a deep folder's beck rises</span></li>
                 <li><KeyMark draw={drawRange} C={C} stone={stone} /><span><b>mountains</b> where folders nest deep and wide</span></li>
                 <li><KeyMark draw={drawWood} C={C} stone={stone} /><span><b>woods</b> the open country between rooms</span></li>
               </ul>
