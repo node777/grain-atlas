@@ -85,9 +85,25 @@ Every grain voice can wake as an agent:
 - the nested voices: Trey and Trya;
 - Kyri's four faculties: Lattice, Scribble, Lantern and Ember.
 
-You can also seat voices of your own under Voices. Each has a face drawn from simple shapes that
-blinks, breathes and talks. The current voice also lives in the **dock** at the corner of every
-view, ready to explain the open page, keep a note, or draft a change.
+You can also seat voices of your own under Voices. Each has a face drawn from a few flat shapes
+in the cloth's plant dyes, with big eyes and one ink line. A few lit voices (Kyli, Quin, Lantern)
+carry a sheen. The faces blink, breathe and talk.
+
+### The companion
+
+The current voice also lives in the **dock** at the corner of every view. Its window has:
+- **Talk**, where the voice knows which page you have open, and any text you select on the page
+  goes with your next message (toggle it on the context line).
+- Quick asks for the open page: explain it, find related pages, keep a note, draft a change.
+- Model and effort pickers, and today's spend against your daily limit.
+- Copy the last answer, start a fresh conversation, a wider window, and a jump to the same
+  conversation on the floor.
+- **Notes**, the voice's sheaves, where you can keep one by hand.
+- **Drafts**, changes waiting on a read-only version.
+
+The face button in the header is the companion's burrow. Click it, or the tuck button in the
+window, and the character leaps along an arc into the header, or back out to its corner. Still
+motion skips the leap. It is also a toggle under Settings, Cloth.
 
 ## Safety notes
 

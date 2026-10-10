@@ -10,7 +10,7 @@
 .chip:disabled { opacity: .45; cursor: default; }
 
 /* talk */
-.talk { display: grid; grid-template-columns: 270px 1fr; gap: 18px; height: calc(100vh - 230px); min-height: 460px; }
+.talk { display: grid; grid-template-columns: minmax(290px, 330px) minmax(0, 1fr); gap: 18px; height: calc(100vh - 230px); min-height: 460px; }
 .talk-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .voice-roster { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .voice-pick { display: grid; justify-items: center; gap: 2px; background: none; border: 1px solid transparent; border-radius: var(--r2); padding: 4px 2px; cursor: pointer; font-family: var(--sans); font-size: 11px; color: var(--ink-2); }

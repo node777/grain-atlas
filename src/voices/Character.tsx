@@ -1,8 +1,9 @@
-// A voice's face, drawn from simple shapes: a soft head, big eyes, a small mouth, a crown that
-// says which element row it belongs to. It breathes, blinks, looks toward the pointer, and its
-// mouth moves while it speaks. Still motion leaves it calm and open-eyed.
+// A voice's face, drawn from a few flat shapes in the cloth's own dyes: a soft head with one
+// ink line, two big eyes, a small mouth, and a crown for its element row. It breathes, blinks,
+// glances toward the pointer, and its mouth moves while it speaks. A few lit voices (look.gloss)
+// carry a sheen and a catchlight. Still motion leaves it calm and open-eyed.
 
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Look } from './voices'
 import { prefersStill } from '@/core/settings'
 
@@ -45,8 +46,10 @@ function Crown({ kind, color }: { kind: Look['crown']; color: string }) {
   }
 }
 
+/** One ink for every line, warm enough to sit on Stone and on Hearth. */
+const INK = '#34291f'
+
 export function Character({ look, size = 72, speaking, thinking, mood = 'idle', title }: Props) {
-  const uid = useId().replace(/:/g, '')
   const ref = useRef<SVGSVGElement>(null)
   const [blink, setBlink] = useState(false)
   const [gaze, setGaze] = useState({ x: 0, y: 0 })
@@ -58,84 +61,81 @@ export function Character({ look, size = 72, speaking, thinking, mood = 'idle', 
     if (still) return
     let t: ReturnType<typeof setTimeout>
     const loop = () => {
-      t = setTimeout(() => { setBlink(true); setTimeout(() => setBlink(false), 140); loop() }, 2400 + Math.random() * 3200)
+      t = setTimeout(() => { setBlink(true); setTimeout(() => setBlink(false), 130); loop() }, 2600 + Math.random() * 3400)
     }
     loop()
     return () => clearTimeout(t)
   }, [still])
 
-  // eyes follow the pointer, gently
+  // eyes glance toward the pointer, gently; updates are coalesced to one per frame
   useEffect(() => {
     if (still) return
-    const onMove = (e: PointerEvent) => {
+    let raf = 0, last: PointerEvent | null = null
+    const apply = () => {
+      raf = 0
       const r = ref.current?.getBoundingClientRect()
-      if (!r) return
-      const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2)
+      if (!r || !last) return
+      const dx = last.clientX - (r.left + r.width / 2), dy = last.clientY - (r.top + r.height / 2)
       const d = Math.hypot(dx, dy) || 1
-      const k = Math.min(1, d / 400)
-      setGaze({ x: (dx / d) * 2.6 * k, y: (dy / d) * 2 * k })
+      const k = Math.min(1, d / 360)
+      const x = Math.round((dx / d) * 2.4 * k * 4) / 4, y = Math.round((dy / d) * 1.8 * k * 4) / 4
+      setGaze((g) => (g.x === x && g.y === y ? g : { x, y }))
     }
-    window.addEventListener('pointermove', onMove)
-    return () => window.removeEventListener('pointermove', onMove)
+    const onMove = (e: PointerEvent) => { last = e; if (!raf) raf = requestAnimationFrame(apply) }
+    window.addEventListener('pointermove', onMove, { passive: true })
+    return () => { window.removeEventListener('pointermove', onMove); if (raf) cancelAnimationFrame(raf) }
   }, [still])
 
   // a moving mouth while speaking
   useEffect(() => {
     if (!speaking || still) { setMouthOpen(0); return }
-    const id = setInterval(() => setMouthOpen(0.3 + Math.random() * 0.7), 110)
+    const id = setInterval(() => setMouthOpen(0.3 + Math.random() * 0.7), 120)
     return () => clearInterval(id)
   }, [speaking, still])
 
   const smile = mood === 'happy' ? Math.max(0.8, look.mouth) : mood === 'focused' ? 0.2 : look.mouth
-  const lids = mood === 'sleepy' ? 0.55 : thinking ? Math.max(look.lids, 0.25) : look.lids
-  const eyeR = 6.2 * look.eyes
-  const eyeY = 54
-  const lidH = blink ? eyeR * 2.2 : eyeR * 2 * lids
-  const gx = thinking ? 2.2 : gaze.x, gy = thinking ? -2.4 : gaze.y
-  const mouthW = 9
-  const curve = smile * 6
-  const open = mouthOpen * 5
+  const lids = mood === 'sleepy' ? 0.6 : thinking ? Math.max(look.lids, 0.25) : look.lids
+  const r = 8.6 * look.eyes
+  const rx = r * 0.9
+  const ryOpen = r * 1.08
+  const ry = ryOpen * (1 - lids * 0.6)
+  const eyeY = 56 + (ryOpen - ry) * 0.5
+  const gx = thinking ? 2 : gaze.x, gy = thinking ? -2 : gaze.y
+  const mouthY = 73
+  const curve = smile * 5
+  const open = mouthOpen * 4.5
 
   return (
     <svg
       ref={ref}
       className={`voice-character${still ? '' : ' alive'}${speaking ? ' speaking' : ''}`}
       width={size} height={size} viewBox="0 -10 100 106" role="img" aria-label={title ?? 'a voice'}
-      style={{ ['--bob' as string]: `${2.6 - look.bob * 1.4}s`, ['--lift' as string]: `${1 + look.bob * 2.5}px` }}
+      style={{ ['--bob' as string]: `${2.8 - look.bob * 1.4}s`, ['--lift' as string]: `${1 + look.bob * 2.2}px` }}
     >
-      <defs>
-        <radialGradient id={`g${uid}`} cx="40%" cy="35%" r="70%">
-          <stop offset="0%" stopColor="#fff6e4" stopOpacity="0.55" />
-          <stop offset="60%" stopColor={look.hue} stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <ellipse cx="50" cy="94" rx="26" ry="4" fill="rgba(0,0,0,0.22)" className="vc-shadow" />
+      <ellipse cx="50" cy="94" rx="24" ry="3.6" fill="rgba(0,0,0,0.16)" className="vc-shadow" />
       <g className="vc-body">
         <Crown kind={look.crown} color={look.accent} />
         {look.ears === 'leaf' && <g fill={look.accent}><ellipse cx="14" cy="46" rx="5" ry="10" transform="rotate(-30 14 46)" /><ellipse cx="86" cy="46" rx="5" ry="10" transform="rotate(30 86 46)" /></g>}
-        {look.ears === 'round' && <g fill={look.hue} stroke={look.accent} strokeWidth="1.5"><circle cx="18" cy="30" r="8" /><circle cx="82" cy="30" r="8" /></g>}
-        {look.ears === 'point' && <g fill={look.hue} stroke={look.accent} strokeWidth="1.5"><path d="M18 36 L14 14 L32 26 Z" /><path d="M82 36 L86 14 L68 26 Z" /></g>}
-        <path d={HEADS[look.head]} fill={look.hue} stroke={look.accent} strokeWidth="2" />
-        <path d={HEADS[look.head]} fill={`url(#g${uid})`} />
-        {look.cheeks && <g fill={look.accent} opacity="0.32"><ellipse cx="27" cy="66" rx="7" ry="4.5" /><ellipse cx="73" cy="66" rx="7" ry="4.5" /></g>}
-        {/* brows */}
-        <g stroke="#3a2a1c" strokeWidth="2.2" strokeLinecap="round" fill="none" opacity="0.75">
-          <path d={`M${31} ${40 - look.brows * 2} Q37 ${37 - look.brows * 3} ${43} ${40 - look.brows}`} />
-          <path d={`M${57} ${40 - look.brows} Q63 ${37 - look.brows * 3} ${69} ${40 - look.brows * 2}`} />
-        </g>
+        {look.ears === 'round' && <g fill={look.hue} stroke={INK} strokeWidth="2"><circle cx="18" cy="30" r="8" /><circle cx="82" cy="30" r="8" /></g>}
+        {look.ears === 'point' && <g fill={look.hue} stroke={INK} strokeWidth="2" strokeLinejoin="round"><path d="M18 36 L14 14 L32 26 Z" /><path d="M82 36 L86 14 L68 26 Z" /></g>}
+        <path d={HEADS[look.head]} fill={look.hue} stroke={INK} strokeWidth="2.2" strokeLinejoin="round" />
+        {look.gloss && <ellipse cx="34" cy="31" rx="11" ry="6" transform="rotate(-24 34 31)" fill="#fff8ea" opacity="0.3" />}
+        {look.cheeks && <g fill={look.accent} opacity="0.28"><circle cx="24" cy="69" r="5.5" /><circle cx="76" cy="69" r="5.5" /></g>}
         {/* eyes */}
-        {[37, 63].map((cx) => (
-          <g key={cx}>
-            <ellipse cx={cx} cy={eyeY} rx={eyeR} ry={eyeR * 1.1} fill="#2b1f16" />
-            <circle cx={cx + gx - eyeR * 0.3} cy={eyeY + gy - eyeR * 0.4} r={eyeR * 0.36} fill="#fffaf0" />
-            <circle cx={cx + gx + eyeR * 0.35} cy={eyeY + gy + eyeR * 0.3} r={eyeR * 0.16} fill="#fffaf0" opacity="0.8" />
-            {lidH > 0.2 && <rect x={cx - eyeR - 1} y={eyeY - eyeR * 1.15 - 1} width={eyeR * 2 + 2} height={Math.min(lidH, eyeR * 2.3)} fill={look.hue} />}
-          </g>
-        ))}
+        <g transform={`translate(${gx} ${gy})`}>
+          {[35, 65].map((cx) => blink
+            ? <path key={cx} d={`M${cx - rx} ${eyeY} Q${cx} ${eyeY + 3} ${cx + rx} ${eyeY}`} stroke={INK} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+            : (
+              <g key={cx}>
+                <ellipse cx={cx} cy={eyeY} rx={rx} ry={ry} fill={INK} />
+                {look.gloss && <circle cx={cx - rx * 0.32} cy={eyeY - ry * 0.38} r={r * 0.24} fill="#fff8ea" />}
+              </g>
+            ))}
+        </g>
         {/* mouth */}
         {open > 0.5
-          ? <ellipse cx="50" cy={72 + curve * 0.2} rx={mouthW * 0.55} ry={open * 0.8 + 1} fill="#5a2e22" />
-          : <path d={`M${50 - mouthW} 72 Q50 ${72 + curve} ${50 + mouthW} 72`} stroke="#3a2a1c" strokeWidth="2.4" fill="none" strokeLinecap="round" />}
+          ? <ellipse cx="50" cy={mouthY + 1} rx="4.6" ry={open * 0.7 + 1.2} fill={INK} />
+          : <path d={`M44 ${mouthY} Q50 ${mouthY + curve} 56 ${mouthY}`} stroke={INK} strokeWidth="2.4" fill="none" strokeLinecap="round" />}
         {thinking && <g fill={look.accent} className="vc-think"><circle cx="86" cy="22" r="2.4" /><circle cx="92" cy="12" r="3.4" /><circle cx="97" cy="0" r="4.4" /></g>}
       </g>
     </svg>
