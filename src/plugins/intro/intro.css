@@ -1,0 +1,18 @@
+.intro { position: fixed; inset: 0; background: #0f0c0a; color: #e9dcc0; }
+.intro-canvas { width: 100%; height: 100%; display: block; }
+.intro-title {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center;
+  width: min(560px, calc(100% - 32px)); padding: 28px 24px; border-radius: var(--r4);
+  background: rgba(27, 23, 19, 0.78); border: 1px solid #4a3d30; backdrop-filter: blur(3px);
+  opacity: 0; pointer-events: none; transition: opacity var(--settle) var(--ease);
+}
+.intro-title.on { opacity: 1; pointer-events: auto; }
+.intro-title h1 { font-weight: 400; font-size: clamp(42px, 7vw, 68px); margin: 8px 0 0; letter-spacing: .01em; }
+.intro-title h1 em { color: var(--brass); }
+.intro-title p { margin: 6px 0; font-size: 20px; font-style: italic; }
+.intro-title .intro-sub { font-style: normal; font-size: 16px; color: #b4a892; }
+.intro-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+.intro .chip { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; font-size: 14px; padding: 7px 14px; }
+.intro .intro-go { border-color: var(--invite); color: #f1c98b; }
+.intro-note { font-size: 12px !important; font-style: normal !important; color: #8f816b; margin-top: 14px !important; }
+.intro-skip { position: absolute; right: 18px; bottom: 18px; color: #b4a892; }

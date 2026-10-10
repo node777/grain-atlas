@@ -1,0 +1,20 @@
+.journeys { position: absolute; inset: 0; padding: 28px clamp(16px, 4vw, 56px) 240px; }
+.journeys-head { max-width: 980px; margin: 0 auto 26px; }
+.journeys-head h1 { font-weight: 400; font-size: clamp(34px, 5vw, 54px); margin: 0 0 6px; font-style: italic; }
+.journeys-head p { max-width: 62ch; font-size: 18px; }
+.granary { display: flex; gap: 16px; align-items: center; margin-top: 14px; }
+.journey-grid { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.journey { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; border-top: 3px solid var(--accent); }
+.journey.active { box-shadow: 0 0 0 1.5px var(--invite) inset; }
+.journey-top { display: flex; gap: 12px; }
+.journey h2 { font-weight: 400; font-size: 23px; margin: 0; }
+.journey-inv { margin: 2px 0 6px; font-size: 15.5px; color: var(--ink-2); }
+.journey-stops { margin: 0; padding-left: 20px; font-size: 15px; }
+.journey-stops li { margin: 3px 0; }
+.journey-stops li a { color: var(--ink); text-decoration: none; }
+.journey-stops li a:hover { color: var(--gold); }
+.journey-stops li.read::marker { color: var(--gold); }
+.journey-stops li.read a { color: var(--ink-2); }
+.journey-stops code { display: block; font-size: 11.5px; color: var(--ink-3); }
+.journey-go { align-self: flex-start; border-color: var(--invite); color: var(--invite); margin-top: auto; }
+.benediction { margin: auto 0 0; font-style: italic; color: var(--gold); }

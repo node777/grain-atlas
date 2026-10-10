@@ -1,0 +1,47 @@
+{
+  "name": "grain-atlas",
+  "version": "0.1.0",
+  "description": "An atlas and star chart of the grain monorepo",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p . && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p .",
+    "data:stars": "node scripts/build-stars.mjs",
+    "data:almanac": "node scripts/build-almanac.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/node777/grain-atlas.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/node777/grain-atlas/issues"
+  },
+  "homepage": "https://github.com/node777/grain-atlas#readme",
+  "dependencies": {
+    "@fontsource/public-sans": "^5.1.1",
+    "@fontsource/source-code-pro": "^5.1.1",
+    "@fontsource/tiro-devanagari-sanskrit": "^5.1.0",
+    "@fontsource/vollkorn": "^5.1.1",
+    "astronomy-engine": "^2.1.19",
+    "dompurify": "^3.2.4",
+    "highlight.js": "^11.11.1",
+    "marked": "^14.1.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.0.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.14",
+    "vitest": "^2.1.9"
+  },
+  "private": true,
+  "type": "module"
+}

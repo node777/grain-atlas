@@ -1,0 +1,48 @@
+.sky { position: absolute; inset: 0; background: var(--sky-deep); color: #e9dcc0; }
+.sky-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.sky-canvas:active { cursor: grabbing; }
+.sky .panel { background: rgba(27, 23, 19, 0.82); border-color: #3a3027; backdrop-filter: blur(4px); color: #e9dcc0; }
+.sky .panel .faint, .sky .faint { color: #8f816b; }
+.sky .chip { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; }
+.sky .chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold); }
+.sky select, .sky input { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; color-scheme: dark; }
+.sky-dial { position: absolute; left: 228px; top: 14px; padding: 10px 12px; display: grid; gap: 8px; z-index: 4; }
+.sky-time { position: absolute; left: 228px; bottom: 14px; padding: 10px 12px; display: grid; gap: 6px; z-index: 4; }
+.dial-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sky-err { position: absolute; inset: 0; display: grid; place-items: center; }
+.sky-selected { position: absolute; left: 50%; transform: translateX(-50%); top: 14px; width: min(420px, calc(100% - 32px)); padding: 10px 14px; z-index: 5; }
+.sky-panel { position: absolute; right: 0; top: 0; bottom: 0; width: min(440px, 100%); overflow: auto; padding: 16px 18px 60px; border-radius: 0; border-width: 0 0 0 1px; z-index: 6; color: var(--ink); background: var(--page); }
+.sky-panel.folded { width: auto; bottom: auto; padding: 8px; border-width: 0 0 1px 1px; }
+.sky-fold { position: sticky; top: 0; float: right; z-index: 2; }
+.moment-card { padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.readings-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.readings-body h4 { font-family: var(--sans); font-weight: 600; font-size: 12px; color: var(--ink-2); margin: 18px 0 6px; border-bottom: 1px solid var(--rule); padding-bottom: 3px; }
+.r-lede { font-style: italic; color: var(--ink-2); margin: 0 0 8px; }
+.r-row { display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 4px 0; }
+.r-k { font-size: 12.5px; color: var(--ink-3); padding-top: 2px; }
+.r-v { font-size: 16px; }
+.r-note { font-size: 13.5px; color: var(--ink-2); line-height: 1.4; margin-top: 2px; }
+.r-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+.r-table th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 11.5px; color: var(--ink-2); border-bottom: 1.5px solid var(--brass-dim); padding: 4px 6px; }
+.r-table td { border-bottom: 1px solid var(--rule); padding: 4px 6px; white-space: nowrap; }
+.si-chart { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 64px); border: 1.5px solid var(--brass-dim); border-radius: var(--r2); overflow: hidden; margin: 10px 0; }
+.si-cell { border: 1px solid var(--rule); padding: 3px 5px; position: relative; display: flex; flex-direction: column; font-size: 12px; }
+.si-cell.asc { background: color-mix(in srgb, var(--brass) 14%, transparent); }
+.si-sign { font-family: var(--sans); font-size: 10.5px; color: var(--ink-3); }
+.si-asc { position: absolute; right: 4px; top: 2px; font-family: var(--sans); font-size: 10px; color: var(--gold); }
+.si-bodies { font-family: var(--sans); font-weight: 600; font-size: 13px; margin-top: auto; color: var(--ink); }
+.si-centre { display: grid; place-content: center; text-align: center; padding: 6px; }
+.dasha-list { padding-left: 0; list-style: none; margin: 8px 0; }
+.dasha-list li { display: flex; flex-wrap: wrap; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--rule); }
+.dasha-list li.on > span:first-child { color: var(--gold); font-weight: 600; }
+.dasha-sub { width: 100%; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--ink-2); padding: 4px 0 2px 14px; }
+.dasha-sub .on { color: var(--gold); }
+.kin-row { display: flex; justify-content: space-between; gap: 8px; }
+.kin-row a { text-decoration: none; color: var(--ink); }
+.kin-row a:hover { color: var(--gold); }
+@media (max-width: 900px) {
+  .sky-panel { top: auto; height: 46%; width: 100%; border-width: 1px 0 0 0; }
+  .sky-panel.folded { height: auto; }
+  .sky-dial { left: 8px; top: 8px; }
+  .sky-time { left: auto; right: 8px; top: 8px; bottom: auto; }
+}

@@ -1,0 +1,116 @@
+/*
+ * Linengrow tokens for the atlas.
+ *
+ * Grounds and inks are grain's own first cloth (active-designing/date/20260825/
+ * 20260825-234156_linengrow-first-cloth-and-fonts-gauge-pass.md): Stone by day, Hearth by night,
+ * every surface one weave finer than the page beneath it. Accents are the plant dyes from the
+ * press page -- madder, annatto, weld, sage, elder -- with brass and gold from the wheat mark.
+ * There is no blue on purpose: blue stays below red in every ground, and the night sky is warm.
+ *
+ * Shape law: rounded, never square, never circular for an enclosure.
+ * Motion law: Still, Settle (one second, whole view), Respond (local, four pulses at most).
+ */
+
+:root {
+  --serif: 'Vollkorn', 'Iowan Old Style', Georgia, serif;
+  --sans: 'Public Sans', system-ui, sans-serif;
+  --mono: 'Source Code Pro', 'Iosevka', Menlo, Consolas, monospace;
+  --deva: 'Tiro Devanagari Sanskrit', 'Noto Serif Devanagari', serif;
+
+  --r1: 5px;
+  --r2: 9px;
+  --r3: 14px;
+  --r4: 22px;
+
+  --settle: 1000ms;
+  --respond: 240ms;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+
+  --measure: 70ch;
+
+  /* the sky and instrument palette is shared by both modes */
+  --sky-deep: #120f0c;
+  --sky: #1b1713;
+  --sky-haze: #2a221b;
+  --star: #f6ead0;
+  --star-warm: #f1c98b;
+  --brass: #c8992f;
+  --brass-dim: #9a6f22;
+  --gold: #d9b45a;
+  --gold-pale: #f4e9cf;
+
+  /* the five element rows (aether, air, fire, water, earth) as accents */
+  --el-aether: #b08aab;
+  --el-air: #9fae6c;
+  --el-fire: #d38a4f;
+  --el-water: #c8766a;
+  --el-earth: #d0b34a;
+}
+
+:root,
+:root[data-mode='hearth'] {
+  color-scheme: dark;
+  --page: #2a2520;          /* Hearth */
+  --surface: #3a332c;       /* Ember */
+  --surface-2: #453c33;
+  --ink: #e5dcc8;
+  --ink-surface: #eae1cc;
+  --ink-2: #b4a892;
+  --ink-3: #8a7f6c;
+  --rule: #4a4034;
+  --thread: 255, 240, 215;
+  --thread-a: 0.045;
+
+  --madder: #c8766a;
+  --annatto: #d38a4f;
+  --weld: #d0b34a;
+  --sage: #9fae6c;
+  --elder: #b08aab;
+  --invite: #e0a54a;        /* amber marks invitation */
+  --green: #9fae6c;         /* a witness says GREEN */
+  --red: #c8766a;
+  --veil: rgba(18, 15, 12, 0.72);
+}
+
+:root[data-mode='stone'] {
+  color-scheme: light;
+  --page: #ddd3bd;          /* Stone */
+  --surface: #ede5d3;       /* Oat */
+  --surface-2: #f4eee0;
+  --ink: #2d2620;
+  --ink-surface: #3d3528;
+  --ink-2: #6a5f4e;
+  --ink-3: #8e826d;
+  --rule: #c9bda3;
+  --thread: 85, 65, 30;
+  --thread-a: 0.055;
+
+  --madder: #9a4a3a;
+  --annatto: #b5652a;
+  --weld: #a68a1f;
+  --sage: #6b7a42;
+  --elder: #6f4e6b;
+  --invite: #b5652a;
+  --green: #5e6e34;
+  --red: #9a4a3a;
+  --veil: rgba(221, 211, 189, 0.8);
+}
+
+/* The weave: warp and weft as two crossed thread layers. Elevation is weave fineness. */
+.linen {
+  background-color: var(--page);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(var(--thread), var(--thread-a)) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(var(--thread), calc(var(--thread-a) * 0.8)) 0 1px, transparent 1px 4px);
+}
+.linen-fine {
+  background-color: var(--surface);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(var(--thread), calc(var(--thread-a) * 0.8)) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(var(--thread), calc(var(--thread-a) * 0.6)) 0 1px, transparent 1px 3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --settle: 0ms; --respond: 0ms; }
+}
+:root[data-motion='still'] { --settle: 0ms; --respond: 0ms; }
