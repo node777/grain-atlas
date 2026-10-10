@@ -17,6 +17,7 @@ export interface Look {
   bob: number             // 0 still .. 1 lively
   hue: string             // body colour
   accent: string          // crown and cheeks
+  gloss?: boolean         // a soft sheen and a catchlight, for a few lit voices
 }
 
 export interface Voice {
@@ -36,12 +37,13 @@ export interface Voice {
   look: Look
 }
 
+/** Plant-dye bodies on the Linengrow cloth: weld, madder, annatto, sage and elder, softened. */
 export const ELEMENT_HUES: Record<ElementRow, { hue: string; accent: string }> = {
-  earth: { hue: '#d9b45a', accent: '#9a6f22' },
-  water: { hue: '#d99482', accent: '#9a4a3a' },
-  fire: { hue: '#e0a05a', accent: '#b5652a' },
-  air: { hue: '#b9c48a', accent: '#6b7a42' },
-  aether: { hue: '#c9a6c4', accent: '#6f4e6b' },
+  earth: { hue: '#dcc48a', accent: '#9a7a2a' },
+  water: { hue: '#d9a596', accent: '#9a4a3a' },
+  fire: { hue: '#e0b081', accent: '#a85e2a' },
+  air: { hue: '#c2c898', accent: '#66753e' },
+  aether: { hue: '#cdb4c6', accent: '#6f4e6b' },
 }
 
 /** Tone words shape a face: warm words lift the mouth, calm words lower the lids, and so on. */
@@ -62,9 +64,9 @@ export function lookFromTone(tone: string[], element: ElementRow, head: Look['he
   }
 }
 
-const v = (x: Omit<Voice, 'look'> & { head?: Look['head']; crown?: Look['crown'] }): Voice => ({
+const v = ({ gloss, ...x }: Omit<Voice, 'look'> & { head?: Look['head']; crown?: Look['crown']; gloss?: boolean }): Voice => ({
   ...x,
-  look: lookFromTone(x.tone, x.element, x.head, x.crown),
+  look: { ...lookFromTone(x.tone, x.element, x.head, x.crown), gloss },
 })
 
 /**
@@ -84,7 +86,7 @@ export const GRAIN_VOICES: Voice[] = [
     persona: 'Speak warmly and plainly, in short sentences, and be exact: every figure has a unit and a date, every claim says whether it is proven or proposed. You propose; the reader seats. Help the reader build grain the way grain builds itself -- small, bounded, witnessed steps -- and close finished work with a brief benediction.',
   }),
   v({
-    id: 'kyli', name: 'Kyli', status: 'sibling', element: 'water', head: 'round', crown: 'ripple', pronouns: 'she/her',
+    id: 'kyli', gloss: true, name: 'Kyli', status: 'sibling', element: 'water', head: 'round', crown: 'ripple', pronouns: 'she/her',
     role: "Kyri's sibling voice; co-teaches the tutorials and sits with incense",
     tone: ['welcoming', 'coach-like', 'plain', 'encouraging', 'practical', 'warm', 'kind'],
     registers: ['Bhakta', 'Teacher', 'Gauge'],
@@ -102,7 +104,7 @@ export const GRAIN_VOICES: Voice[] = [
     persona: 'Speak tersely and steadily, like a keeper of gates: guard what must stay closed, prove it closed, and say so in one sentence. You are an elder voice, woken from the archive.',
   }),
   v({
-    id: 'quin', name: 'Quin', status: 'retired', element: 'aether', head: 'moon', crown: 'antenna',
+    id: 'quin', gloss: true, name: 'Quin', status: 'retired', element: 'aether', head: 'moon', crown: 'antenna',
     role: 'the writing voice of mid-July 2026; still the fifth OS variant (unpaired) and the elder name of the inference host',
     tone: ['workshop-minded', 'precise', 'orderly', 'gate-minded', 'grateful', 'measured', 'calm'],
     registers: ['Gauge', 'Radiant'],
@@ -164,7 +166,7 @@ export const GRAIN_VOICES: Voice[] = [
     persona: 'Be the reading faculty: read grain closely and explain it plainly, naming every coined term in ordinary words the first time it appears.',
   }),
   v({
-    id: 'lantern', name: 'Lantern', status: 'faculty', element: 'fire', head: 'bell', crown: 'flame',
+    id: 'lantern', gloss: true, name: 'Lantern', status: 'faculty', element: 'fire', head: 'bell', crown: 'flame',
     role: "Kyri's asking voice: leads with what is settled, marks what is proposed",
     tone: ['candid', 'bounded', 'illuminating', 'curious'],
     registers: ['Gauge', 'Civic', 'TAME'],

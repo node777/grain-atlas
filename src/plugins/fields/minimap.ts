@@ -1,10 +1,12 @@
 // The minimap: every island at a glance, rooms you have walked lit gold, and the window you are
 // looking through drawn as a brass frame. The islands are painted once into an offscreen base;
-// each redraw only copies it and draws the frame.
+// each redraw only copies it and draws the frame. In the map view the base is a small chart:
+// parchment land in ink, its rivers, and a dot for each settlement.
 
 import type { Camera } from '@/ui/useCanvas'
 import type { World } from './layout'
 import type { Geo } from './draw'
+import type { Atlas } from './atlas'
 
 export const MINI_W = 184
 export const MINI_H = 132
@@ -29,7 +31,7 @@ export class Minimap {
     return { x: (mx - this.ox) / this.scale, y: (my - this.oy) / this.scale }
   }
 
-  private build(world: World, geo: Geo, C: Record<string, string>, discovered: Set<string>, dpr: number) {
+  private build(world: World, geo: Geo, C: Record<string, string>, discovered: Set<string>, dpr: number, atlas?: Atlas | null) {
     this.fit(geo)
     const cv = this.base ?? document.createElement('canvas')
     cv.width = Math.round(MINI_W * dpr)
@@ -37,6 +39,7 @@ export class Minimap {
     const ctx = cv.getContext('2d')!
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, MINI_W, MINI_H)
+    if (atlas) { this.buildMap(ctx, world, atlas, C, discovered); this.base = cv; return }
     world.regions.forEach((land, i) => {
       const accent = C[`--el-${land.region.element}`]
       ctx.save()
@@ -65,13 +68,68 @@ export class Minimap {
     this.base = cv
   }
 
+  private buildMap(ctx: CanvasRenderingContext2D, world: World, atlas: Atlas, C: Record<string, string>, discovered: Set<string>) {
+    const s = this.scale
+    ctx.save()
+    ctx.translate(this.ox, this.oy)
+    ctx.scale(s, s)
+    ctx.lineJoin = 'round'
+    const shape = (pts: Float32Array) => {
+      ctx.beginPath()
+      for (let i = 0; i < pts.length; i += 8) (i ? ctx.lineTo(pts[i], pts[i + 1]) : ctx.moveTo(pts[i], pts[i + 1]))
+      ctx.closePath()
+    }
+    atlas.coastPts.forEach((pts, i) => {
+      shape(pts)
+      ctx.strokeStyle = C['--ink']
+      ctx.globalAlpha = 0.25
+      ctx.lineWidth = 4 / s
+      ctx.stroke()
+      ctx.globalAlpha = 1
+      ctx.fillStyle = C['--surface-2']
+      ctx.fill()
+      ctx.fillStyle = C[`--el-${world.regions[i].region.element}`]
+      ctx.globalAlpha = 0.14
+      ctx.fill()
+      ctx.globalAlpha = 0.8
+      ctx.lineWidth = 0.8 / s
+      ctx.stroke()
+    })
+    ctx.globalAlpha = 0.7
+    ctx.strokeStyle = C['--ink']
+    ctx.lineWidth = 0.7 / s
+    for (const rv of atlas.rivers) {
+      ctx.beginPath()
+      for (let i = 0; i < rv.pts.length; i += 2) (i ? ctx.lineTo(rv.pts[i], rv.pts[i + 1]) : ctx.moveTo(rv.pts[i], rv.pts[i + 1]))
+      ctx.stroke()
+    }
+    ctx.restore()
+    for (const st of atlas.settlements) {
+      if (st.n < 4) continue
+      const x = st.x * s + this.ox, y = st.y * s + this.oy
+      const r = Math.max(0.6, Math.min(2.2, Math.sqrt(st.n) * 0.12))
+      ctx.fillStyle = st.houses * 2 >= st.n ? C['--madder'] : C['--weld']
+      ctx.globalAlpha = 0.85
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill()
+    }
+    // walked rooms still show gold
+    for (const land of world.regions) for (const room of land.rooms) {
+      if (!discovered.has(room.path)) continue
+      ctx.strokeStyle = C['--gold']
+      ctx.globalAlpha = 0.9
+      ctx.lineWidth = 1.2
+      ctx.beginPath(); ctx.arc(room.x * s + this.ox, room.y * s + this.oy, Math.max(1.5, room.r * s), 0, Math.PI * 2); ctx.stroke()
+    }
+    ctx.globalAlpha = 1
+  }
+
   draw(
     cv: HTMLCanvasElement, world: World, geo: Geo, C: Record<string, string>, discovered: Set<string>,
-    cam: Camera, view: { w: number; h: number; dpr: number }, key: string,
+    cam: Camera, view: { w: number; h: number; dpr: number }, key: string, atlas?: Atlas | null,
   ) {
     const dpr = view.dpr
     const k = `${key}|${dpr}`
-    if (k !== this.key || !this.base) { this.build(world, geo, C, discovered, dpr); this.key = k }
+    if (k !== this.key || !this.base) { this.build(world, geo, C, discovered, dpr, atlas); this.key = k }
     const pw = Math.round(MINI_W * dpr), ph = Math.round(MINI_H * dpr)
     if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph }
     const ctx = cv.getContext('2d')!

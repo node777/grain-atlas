@@ -5,7 +5,7 @@
 An atlas, star chart and workbench for the [grain](https://github.com/grain-ww/grain) monorepo,
 built as a static site. It reads grain live from GitHub, or from your own checkout. It works with
 grain's voices on the **Threshing Floor**, and shows the tree seven ways:
-- **Fields** -- the tree as land, one grain per file.
+- **Fields** -- the tree as land, one grain per file: a bubble map, or an old atlas where pages are houses gathered into towns, dated folders run as rivers, and deep nesting rises into mountains (press M to switch).
 - **Ledger** -- folders and files, sorted and searchable.
 - **Heavens** -- grain's history as a sky.
 - **Sky** -- an astrolabe that opens into a dome of real stars.

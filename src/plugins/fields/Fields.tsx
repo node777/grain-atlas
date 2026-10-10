@@ -2,6 +2,9 @@
 // element's colour, folders are plots within plots, and every file is a single grain.
 // Rhumb lines run out from the Front Door the way a portolan chart's run from its rose.
 // Rooms you have not read in yet lie under a warm mist; reading a page there clears it.
+//
+// Two ways to draw it share one camera, one selection and one set of hands: Bubbles (the plots
+// and furrows above) and Map, an old atlas of the same tree (see atlas.ts and mapdraw.ts).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@/core/store'
@@ -16,9 +19,25 @@ import { Stamp } from '@/ui/Stamp'
 import { layoutWorld, type Plot, type World, type Grain } from './layout'
 import { buildGeo, drawFields, roomOfFile, roomOfPlot, type Geo } from './draw'
 import { Minimap, MINI_W, MINI_H } from './minimap'
+import { fieldsPrefs } from './prefs'
+import { buildAtlas, type Atlas } from './atlas'
+import { MapRenderer, pickGlyph, markOf } from './mapdraw'
+import { FieldsControls } from './Controls'
 import './fields.css'
 
-interface Pick { plot?: Plot; grain?: Grain; regionName?: string }
+interface Pick { plot?: Plot; grain?: Grain; regionName?: string; glyph?: number }
+
+// the atlas is worked out once per tree, the first time the map is asked for
+const atlases = new WeakMap<World, Atlas>()
+const atlasFor = (world: World, entries: Parameters<typeof buildAtlas>[1]) => {
+  let at = atlases.get(world)
+  if (!at) { at = buildAtlas(world, entries); atlases.set(world, at) }
+  return at
+}
+/** Where a plot stands in the view being drawn: the map re-strings a few, the bubbles none. */
+type PosOf = (p: Plot) => { x: number; y: number }
+const bubblePos: PosOf = (p) => p
+const mapPos: PosOf = (p) => ({ x: p.mx ?? p.x, y: p.my ?? p.y })
 
 const PULSE_MS = 720
 const PAN_KEYS: Record<string, [number, number]> = {
@@ -68,8 +87,12 @@ export function Fields({ route }: ViewProps) {
   const seeds = useStore(progress, (p) => p.seeds)
   const active = useStore(progress, (p) => p.activeJourney)
   const mode = useStore(settings, (s) => s.mode)
+  const prefs = useStore(fieldsPrefs)
   const world = useMemo<World | null>(() => (r.entries.size > 1 ? layoutWorld(r.entries) : null), [r.version])
   const geo = useMemo<Geo | null>(() => (world ? buildGeo(world) : null), [world])
+  const atlas = useMemo<Atlas | null>(() => (world && prefs.view === 'map' ? atlasFor(world, r.entries) : null), [world, prefs.view])
+  const isMap = !!atlas
+  const posOf: PosOf = isMap ? mapPos : bubblePos
   const discovered = useMemo(() => {
     const out = new Set<string>()
     if (!geo) return out
@@ -78,7 +101,12 @@ export function Fields({ route }: ViewProps) {
   }, [seeds, geo])
   const [hover, setHover] = useState<Pick & { x: number; y: number } | null>(null)
   const [selected, setSelected] = useState<Plot | null>(null)
+  const [keyColors, setKeyColors] = useState<Record<string, string>>({})
   const colors = useRef<Record<string, string>>({})
+  const colorsGen = useRef(0)
+  const mapR = useRef<MapRenderer | null>(null)
+  if (!mapR.current) mapR.current = new MapRenderer()
+  const hoverGlyph = useRef(-1)
   const fog = useRef<HTMLCanvasElement | null>(null)
   const fitted = useRef(false)
   const hoverPlot = useRef<Plot | null>(null)
@@ -86,18 +114,21 @@ export function Fields({ route }: ViewProps) {
   const lastFly = useRef<{ k: number; t: number }>({ k: 0, t: 0 })
   const mini = useRef(new Minimap())
   const miniRef = useRef<HTMLCanvasElement>(null)
-  const live = useRef({ world, geo, selected, entries: r.entries })
-  live.current = { world, geo, selected, entries: r.entries }
+  const live = useRef({ world, geo, selected, entries: r.entries, atlas, posOf })
+  live.current = { world, geo, selected, entries: r.entries, atlas, posOf }
 
   useEffect(() => {
     const names = ['--page', '--surface', '--surface-2', '--ink', '--ink-2', '--ink-3', '--rule', '--brass', '--brass-dim', '--gold', '--star',
-      '--el-aether', '--el-air', '--el-fire', '--el-water', '--el-earth', '--invite', '--madder']
+      '--el-aether', '--el-air', '--el-fire', '--el-water', '--el-earth', '--invite', '--madder', '--annatto', '--weld', '--sage']
     colors.current = Object.fromEntries(names.map((n) => [n, cssVar(n)]))
+    colorsGen.current++
+    setKeyColors(colors.current)
     fog.current = fogTile(mode === 'stone' ? colors.current['--surface-2'] : colors.current['--ink-2'])
     api.redraw()
   }, [mode])
 
   const pickAt = (sx: number, sy: number, a: CanvasApi): Pick => {
+    const { world, atlas, posOf } = live.current
     if (!world) return {}
     const w = a.toWorld(sx, sy)
     const k = a.camera.current.k
@@ -106,13 +137,23 @@ export function Fields({ route }: ViewProps) {
       let found: Plot | undefined
       let level: Plot[] = land.rooms
       while (level.length) {
-        const hit: Plot | undefined = level.find((p) => Math.hypot(w.x - p.x, w.y - p.y) <= p.r)
+        const hit: Plot | undefined = level.find((p) => { const q = posOf(p); return Math.hypot(w.x - q.x, w.y - q.y) <= p.r })
         if (!hit) break
         found = hit
         if (hit.r * k < 70) break
         level = hit.children
       }
-      if (found && found.r * k > 50) {
+      if (atlas) {
+        // on the map a file's mark can be aimed at as soon as it is drawn as more than a dot
+        const gi = pickGlyph(atlas, w.x, w.y, k)
+        if (gi >= 0) {
+          const path = atlas.path[gi]
+          return {
+            plot: atlas.glyphPlot[gi], regionName: land.region.name, glyph: gi,
+            grain: { path, name: path.slice(path.lastIndexOf('/') + 1), x: atlas.gx[gi], y: atlas.gy[gi], a: 0 },
+          }
+        }
+      } else if (found && found.r * k > 50) {
         let best: Grain | undefined, bd = 9 / k
         for (const g of found.grains) {
           const d = Math.hypot(w.x - g.x, w.y - g.y)
@@ -144,20 +185,27 @@ export function Fields({ route }: ViewProps) {
       if (!world || !geo) return
       const still = prefersStill()
       const u = (t - pulseT0.current) / PULSE_MS
-      drawFields(ctx, a, world, geo, {
+      const scene = {
         C: colors.current, stone: mode === 'stone', seeds, activeJourney: active, selected,
         hovered: hoverPlot.current, pulse: !still && hoverPlot.current && u >= 0 && u < 1 ? u : -1,
-        discovered, fog: fog.current,
-      })
+        discovered, fog: fog.current, names: prefs.names, mist: prefs.mist,
+      }
+      if (atlas && colorsGen.current) {
+        const m = mapR.current!
+        m.prepare(world, atlas, colors.current, mode === 'stone', prefs.relief, a.size.current.dpr, `${r.version}|${colorsGen.current}`)
+        m.draw(ctx, a, world, geo, atlas, scene, prefs, hoverGlyph.current, stats)
+      } else if (!atlas) {
+        drawFields(ctx, a, world, geo, scene)
+      }
       if (miniRef.current) {
         mini.current.draw(miniRef.current, world, geo, colors.current, discovered, a.camera.current, a.size.current,
-          `${r.version}|${mode}|${discovered.size}`)
+          `${r.version}|${mode}|${discovered.size}|${prefs.view}`, atlas)
       }
     },
     onHover: (sx, sy, a) => {
       if (sx < 0) {
         setHover(null)
-        if (hoverPlot.current) { hoverPlot.current = null; a.redraw() }
+        if (hoverPlot.current || hoverGlyph.current >= 0) { hoverPlot.current = null; hoverGlyph.current = -1; a.redraw() }
         return
       }
       const p = pickAt(sx, sy, a)
@@ -167,6 +215,8 @@ export function Fields({ route }: ViewProps) {
         pulseT0.current = performance.now()
         a.redraw()
       }
+      const gi = p.glyph ?? -1
+      if (gi !== hoverGlyph.current) { hoverGlyph.current = gi; a.redraw() }
       setHover(p.plot || p.regionName ? { ...p, x: sx, y: sy } : null)
     },
     onPick: (sx, sy, a) => {
@@ -174,7 +224,8 @@ export function Fields({ route }: ViewProps) {
       if (p.grain) { navigate('fields', '', { open: p.grain.path }); return }
       if (p.plot) {
         setSelected(p.plot)
-        flyTo(a, { x: p.plot.x, y: p.plot.y, k: fitK(p.plot, a) })
+        const q = live.current.posOf(p.plot)
+        flyTo(a, { x: q.x, y: q.y, k: fitK(p.plot, a) })
       }
     },
   })
@@ -200,13 +251,14 @@ export function Fields({ route }: ViewProps) {
   useEffect(() => {
     const target = route.params.focus ?? route.params.open
     if (!world || !target) return
-    const at = world.index.get(target) ?? world.index.get(target.split('/').slice(0, -1).join('/'))
+    const index = atlas ? atlas.index : world.index
+    const at = index.get(target) ?? index.get(target.split('/').slice(0, -1).join('/'))
     if (at) {
       const s = api.size.current
       api.flyTo({ x: at.x, y: at.y, k: Math.min(20, Math.max(1.2, (Math.min(s.w, s.h) * 0.12) / at.r)) })
     }
   }, [world, route.params.focus, route.params.open])
-  useEffect(() => api.redraw(), [seeds, active, selected, discovered])
+  useEffect(() => api.redraw(), [seeds, active, selected, discovered, prefs, atlas])
 
   // keyboard: arrows or WASD wander, +/- zoom, Enter reads a plot's door, Escape lets go
   useEffect(() => {
@@ -250,13 +302,14 @@ export function Fields({ route }: ViewProps) {
       if (key === '+' || key === '=') { e.preventDefault(); zoomBy(1.5); return }
       if (key === '-' || key === '_') { e.preventDefault(); zoomBy(1 / 1.5); return }
       if (key === 'Escape') { setSelected(null); return }
+      if (key === 'm') { e.preventDefault(); fieldsPrefs.set((p) => ({ view: p.view === 'map' ? 'bubbles' : 'map' })); return }
       if (key === 'Enter') {
         const plot = hoverPlot.current ?? live.current.selected ?? centrePlot()
         if (!plot) return
         e.preventDefault()
         const readme = live.current.entries.get(plot.path)?.children.find((c) => /(^|\/)README\.md$/i.test(c))
         if (readme) navigate('fields', '', { open: readme })
-        else { setSelected(plot); flyTo(api, { x: plot.x, y: plot.y, k: fitK(plot, api) }) }
+        else { const q = live.current.posOf(plot); setSelected(plot); flyTo(api, { x: q.x, y: q.y, k: fitK(plot, api) }) }
       }
     }
     const onUp = (e: KeyboardEvent) => { held.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key) }
@@ -285,18 +338,20 @@ export function Fields({ route }: ViewProps) {
       // a flight from the first click may still be under way: measure against where it lands
       const now = performance.now()
       const k = Math.max(api.camera.current.k, now < lastFly.current.t + 200 ? lastFly.current.k : 0)
+      const posOf = live.current.posOf
       let level: Plot[] = []
       for (const land of w.regions) if (Math.hypot(at.x - land.x, at.y - land.y) <= land.r * 1.25) level = land.rooms
       let target: Plot | undefined
       while (level.length) {
-        const hit = level.find((p) => Math.hypot(at.x - p.x, at.y - p.y) <= p.r)
+        const hit = level.find((p) => { const q = posOf(p); return Math.hypot(at.x - q.x, at.y - q.y) <= p.r })
         if (!hit) break
         if (fitK(hit, api, 0.46) > k * 1.3) { target = hit; break }
         level = hit.children
       }
       if (target) {
         setSelected(target)
-        flyTo(api, { x: target.x, y: target.y, k: fitK(target, api, 0.46) }, 700)
+        const q = posOf(target)
+        flyTo(api, { x: q.x, y: q.y, k: fitK(target, api, 0.46) }, 700)
       } else {
         flyTo(api, { x: at.x, y: at.y, k: Math.min(30, k * 2) }, 500)
       }
@@ -330,6 +385,7 @@ export function Fields({ route }: ViewProps) {
     }
   }, [world])
 
+  const stats = atlas ? `${atlas.n.toLocaleString()} files, ${atlas.settlements.length} settlements` : ''
   const journey = active ? journeyById(active) : undefined
   const total = geo?.rooms.length ?? 0
   const view = api.size.current
@@ -352,7 +408,10 @@ export function Fields({ route }: ViewProps) {
         <div className="fields-tip panel linen-fine" style={tipStyle}>
           {hover.grain
             ? <><div className="mono" style={{ fontSize: 12.5 }}>{hover.grain.path}</div>
-              {lookup(hover.grain.path)?.meta?.title && <div style={{ fontStyle: 'italic' }}>{lookup(hover.grain.path)!.meta!.title}</div>}</>
+              {lookup(hover.grain.path)?.meta?.title && <div style={{ fontStyle: 'italic' }}>{lookup(hover.grain.path)!.meta!.title}</div>}
+              {atlas && hover.glyph !== undefined && hover.glyph < atlas.n && (
+                <div className="fields-tip-kind sans">a {markOf(atlas, hover.glyph).name}: {markOf(atlas, hover.glyph).means}</div>
+              )}</>
             : hover.plot
               ? <><div><b style={{ fontWeight: 600 }}>{hover.plot.path || 'the root'}</b> <span className="faint">{hover.plot.files} files</span></div>
                 <div className="faint sans" style={{ fontSize: 12 }}>{hover.regionName}</div>
@@ -360,6 +419,7 @@ export function Fields({ route }: ViewProps) {
               : <div style={{ fontStyle: 'italic' }}>{hover.regionName}</div>}
         </div>
       )}
+      {world && <FieldsControls C={keyColors} stone={mode === 'stone'} />}
       {world && (
         <div className="fields-mini panel linen-fine">
           <canvas ref={miniRef} style={{ width: MINI_W, height: MINI_H }} aria-label="Minimap: press or drag to move the view" />
@@ -387,7 +447,9 @@ export function Fields({ route }: ViewProps) {
             {discovered.size} of {total} rooms walked
           </span>
         )}
-        <span className="faint">one grain is one file; drag or use the arrows to wander, scroll or +/- to zoom</span>
+        <span className="faint">{isMap
+          ? 'one house, field or stone is one file; drag or use the arrows to wander, scroll or +/- to zoom'
+          : 'one grain is one file; drag or use the arrows to wander, scroll or +/- to zoom'}</span>
       </div>
     </div>
   )

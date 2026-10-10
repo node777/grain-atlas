@@ -115,7 +115,7 @@ export function VersionsPanel({ onClose }: { onClose?: () => void }) {
         <details style={{ marginTop: 10 }}>
           <summary className="sans" style={{ cursor: 'pointer' }}>Or connect through the bridge (Claude Code on your machine)</summary>
           <p className="muted">Run <code className="mono">node scripts/bridge.mjs ~/grain</code> from a copy of the atlas repository. It prints a token. The bridge lets voices hand work to Claude Code in your checkout, with your own login.</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8 }}>
             <label className="field">Bridge address<input value={b.url} onChange={(e) => bridgeConfig.set({ url: e.target.value })} /></label>
             <label className="field">Token<input type="password" value={b.token} onChange={(e) => bridgeConfig.set({ token: e.target.value })} /></label>
           </div>
@@ -125,7 +125,7 @@ export function VersionsPanel({ onClose }: { onClose?: () => void }) {
 
       <section>
         <h3>A fork on GitHub</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 8, alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) auto', gap: 8, alignItems: 'end' }}>
           <label className="field">owner/name<input value={fork} placeholder="someone/grain" onChange={(e) => setFork(e.target.value)} /></label>
           <label className="field">branch<input value={branch} onChange={(e) => setBranch(e.target.value)} /></label>
           <button className="chip" onClick={openFork}>Open</button>

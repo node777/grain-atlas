@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { useStore } from '@/core/store'
+import { companion, setCompanion } from '@/voices/companion'
 import { settings, type Settings } from '@/core/settings'
 import { VersionsPanel } from './Versions'
 import { rate } from '@/github/client'
@@ -11,6 +13,12 @@ export function SettingsDrawer({ onClose }: { onClose: () => void }) {
   const s = useStore(settings)
   const r = useStore(rate)
   const set = (p: Partial<Settings>) => settings.set(p)
+  const companionOn = useStore(companion, (x) => x.on)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const useMyLocation = () => {
     navigator.geolocation?.getCurrentPosition(
@@ -26,7 +34,7 @@ export function SettingsDrawer({ onClose }: { onClose: () => void }) {
 
   return (
     <div role="dialog" aria-label="Settings" style={{ position: 'fixed', inset: 0, zIndex: 40, display: 'flex', justifyContent: 'flex-end', background: 'var(--veil)' }} onClick={onClose}>
-      <div className="linen-fine panel" style={{ width: 'min(420px, 100%)', height: '100%', overflow: 'auto', padding: 22, borderRadius: 0, display: 'grid', gap: 18, alignContent: 'start' }} onClick={(e) => e.stopPropagation()}>
+      <div className="linen-fine panel drawer" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'baseline' }}>
           <h2 style={{ margin: 0, fontWeight: 400, fontSize: 26 }}>Settings</h2>
           <span style={{ flex: 1 }} />
@@ -53,7 +61,7 @@ export function SettingsDrawer({ onClose }: { onClose: () => void }) {
               {CITIES.map((c) => <option key={c[0]} value={c[0]}>{c[0]}</option>)}
             </select>
           </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 8 }}>
             <label className="field">Latitude
               <input type="number" step="0.001" value={s.place.lat} onChange={(e) => set({ place: { ...s.place, lat: +e.target.value, name: 'Custom place' }, placeSource: 'manual' })} />
             </label>
@@ -91,6 +99,7 @@ export function SettingsDrawer({ onClose }: { onClose: () => void }) {
             <button className="chip" aria-pressed={s.mode === 'hearth'} onClick={() => set({ mode: 'hearth' })}>Hearth (night)</button>
             <button className="chip" aria-pressed={s.mode === 'stone'} onClick={() => set({ mode: 'stone' })}>Stone (day)</button>
             <button className="chip" aria-pressed={s.motion === 'still'} onClick={() => set({ motion: s.motion === 'still' ? 'full' : 'still' })}>Still motion</button>
+            <button className="chip" aria-pressed={companionOn} onClick={() => setCompanion(!companionOn)} title="The voice in the corner of every view; also the face button in the header">Companion</button>
             <button className="chip" onClick={() => { set({ introSeen: false }); location.hash = '#/intro' }}>Replay the opening</button>
           </div>
         </section>

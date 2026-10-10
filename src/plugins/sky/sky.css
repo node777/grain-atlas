@@ -1,17 +1,32 @@
-.sky { position: absolute; inset: 0; background: var(--sky-deep); color: #e9dcc0; }
+.sky { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 80% at 40% 50%, #1e1915 0%, var(--sky) 60%, var(--sky-deep) 100%); color: #e9dcc0; }
+/* the astrolabe lies on the table: the page's own linen shows around the disc */
+.sky.on-table {
+  background-color: var(--page);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(var(--thread), var(--thread-a)) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(var(--thread), calc(var(--thread-a) * 0.8)) 0 1px, transparent 1px 4px);
+}
 .sky-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 .sky-canvas:active { cursor: grabbing; }
-.sky .panel { background: rgba(27, 23, 19, 0.82); border-color: #3a3027; backdrop-filter: blur(4px); color: #e9dcc0; }
-.sky .panel .faint, .sky .faint { color: #8f816b; }
-.sky .chip { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; }
-.sky .chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold); }
-.sky select, .sky input { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; color-scheme: dark; }
-.sky-dial { position: absolute; left: 228px; top: 14px; padding: 10px 12px; display: grid; gap: 8px; z-index: 4; }
-.sky-time { position: absolute; left: 228px; bottom: 14px; padding: 10px 12px; display: grid; gap: 6px; z-index: 4; }
+.sky-dial, .sky-time, .sky-selected { background: rgba(27, 23, 19, 0.84); border-color: #3a3027; backdrop-filter: blur(4px); color: #e9dcc0; }
+.sky-dial .faint, .sky-time .faint, .sky-selected .faint { color: #8f816b; }
+.sky-dial .chip { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; }
+.sky-dial .chip[aria-pressed='true'] { border-color: var(--brass); color: var(--gold); }
+.sky-dial select, .sky-dial input, .sky-time select, .sky-time input { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; color-scheme: dark; }
+.sky-selected { color: #e9dcc0; }
+.sky-selected .muted { color: #b4a892; }
+.sky-dial { position: absolute; left: 16px; top: 14px; width: 256px; box-sizing: border-box; padding: 10px 12px; display: grid; gap: 8px; z-index: 4; }
+.sky-time { position: absolute; left: 16px; bottom: 96px; width: 256px; box-sizing: border-box; padding: 10px 12px; display: grid; gap: 6px; z-index: 4; }
+.sky-dial select, .sky-time select, .sky-time input { font: 13px var(--sans); padding: 4px 6px; min-width: 0; }
+.sky-dial select { flex: 1; }
+.sky-dial input[type='range'] { flex: 1; min-width: 0; }
+.sky-time input[type='datetime-local'] { width: 100%; box-sizing: border-box; }
+.sky-time .ascii-btn { padding: 0 2px; font-size: 12px; }
+.sky-steps { display: grid; grid-template-columns: repeat(4, 1fr); }
 .dial-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .sky-err { position: absolute; inset: 0; display: grid; place-items: center; }
 .sky-selected { position: absolute; left: 50%; transform: translateX(-50%); top: 14px; width: min(420px, calc(100% - 32px)); padding: 10px 14px; z-index: 5; }
-.sky-panel { position: absolute; right: 0; top: 0; bottom: 0; width: min(440px, 100%); overflow: auto; padding: 16px 18px 60px; border-radius: 0; border-width: 0 0 0 1px; z-index: 6; color: var(--ink); background: var(--page); }
+.sky-panel { position: absolute; right: 0; top: 0; bottom: 0; width: min(440px, 100%); overflow: auto; padding: 16px 18px 60px; border-radius: 0; border-width: 0 0 0 1px; border-color: var(--rule); z-index: 6; color: var(--ink); }
 .sky-panel.folded { width: auto; bottom: auto; padding: 8px; border-width: 0 0 1px 1px; }
 .sky-fold { position: sticky; top: 0; float: right; z-index: 2; }
 .moment-card { padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid var(--rule); }
@@ -43,6 +58,16 @@
 @media (max-width: 900px) {
   .sky-panel { top: auto; height: 46%; width: 100%; border-width: 1px 0 0 0; }
   .sky-panel.folded { height: auto; }
-  .sky-dial { left: 8px; top: 8px; }
-  .sky-time { left: auto; right: 8px; top: 8px; bottom: auto; }
+}
+@media (max-width: 700px) {
+  /* a phone: the dials run across the top, time just above the readings */
+  .sky-dial { left: 8px; right: 8px; top: 8px; width: auto; display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 7px 9px; }
+  .sky-dial .dial-row:nth-child(2) { flex: 1 1 90px; }
+  .sky-dial .dial-row:nth-child(3) { flex: 1 1 100%; }
+  .sky-time { left: 8px; right: 8px; width: auto; top: auto; bottom: calc(46% + 8px); display: flex; flex-wrap: wrap; gap: 6px 8px; padding: 7px 9px; align-items: center; }
+  .sky-time input[type='datetime-local'] { flex: 1 1 150px; width: auto; }
+  .sky-steps { flex: 1 1 200px; }
+  /* folded: keep clear of the compass and the dock in the bottom corners */
+  .sky.folded .sky-time { bottom: 84px; }
+  .sky-panel.folded { top: auto; bottom: 14px; right: auto; left: 50%; transform: translateX(-50%); border-width: 1px; border-radius: var(--r2); }
 }

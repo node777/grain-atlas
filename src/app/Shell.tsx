@@ -10,7 +10,7 @@ import { SettingsDrawer } from './SettingsDrawer'
 import { Folio } from './Folio'
 import { Toasts } from '@/ui/Toast'
 import { Mark } from '@/ui/Mark'
-import { Dock } from './Dock'
+import { Dock, CompanionButton } from './Dock'
 import { VersionBadge, VersionsPanel } from './Versions'
 
 let lastBackground = 'fields'
@@ -54,8 +54,9 @@ export function Shell() {
         {r.note && <span className="faint" title={r.note}>[ {r.source} ]</span>}
         <VersionBadge onOpen={() => setVersions(!versions)} />
         <NowChip />
+        <CompanionButton />
         <button
-          className="icon-btn"
+          className="icon-btn mode-btn"
           title={s.mode === 'hearth' ? 'Stone (day) mode' : 'Hearth (night) mode'}
           onClick={() => settings.set({ mode: s.mode === 'hearth' ? 'stone' : 'hearth' })}
         >

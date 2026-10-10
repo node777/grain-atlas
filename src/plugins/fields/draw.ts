@@ -10,6 +10,7 @@ import type { CanvasApi } from '@/ui/useCanvas'
 import { journeyById } from '@/grain/quests'
 import { hash, type Plot, type World } from './layout'
 import { LabelBoard, textWidth, fontAt } from './labels'
+import type { FieldsNames } from './prefs'
 
 export interface Geo {
   hulls: Path2D[]                       // per land, in world coordinates
@@ -71,12 +72,14 @@ export interface Scene {
   pulse: number                         // 0..1 through the hover pulse, or -1 for none
   discovered: Set<string>               // room paths with at least one planted seed
   fog: HTMLCanvasElement | null         // a tile of soft cloud, tinted for the mode
+  names?: FieldsNames                   // default 'all'
+  mist?: boolean                        // default true
 }
 
-// ---- frame state (module-level so hot loops allocate nothing)
-let K = 1, OX = 0, OY = 0, W = 0, H = 0
-const board = new LabelBoard()
-let fogPattern: CanvasPattern | null = null
+// ---- frame state (module-level so hot loops allocate nothing; the map view reads it too)
+export let K = 1, OX = 0, OY = 0, W = 0, H = 0
+export const board = new LabelBoard()
+export let fogPattern: CanvasPattern | null = null
 let fogSource: HTMLCanvasElement | null = null
 
 interface Label { kind: 0 | 1; text: string; sub: string; x: number; y: number; r: number; size: number; depth: number; pr: number }
@@ -96,14 +99,15 @@ const COUNT_FACE = '400 {s} "Public Sans", sans-serif'
 const GRAIN_FACE = '400 {s} "Source Code Pro", monospace'
 const REGION_FACE = 'italic {s} Vollkorn, Georgia, serif'
 
-export function drawFields(ctx: CanvasRenderingContext2D, a: CanvasApi, world: World, geo: Geo, sc: Scene): void {
+/** Set the frame's camera state, clear the label board and fix the mist to the land. Both views
+ *  start every frame here. */
+export function beginFrame(ctx: CanvasRenderingContext2D, a: CanvasApi, world: World, sc: Scene): void {
   const { w, h } = a.size.current
   const cam = a.camera.current
   K = cam.k; W = w; H = h
   OX = w / 2 - cam.x * K; OY = h / 2 - cam.y * K
   nL = 0
   board.reset(w, h)
-  const C = sc.C
   ctx.lineJoin = 'round'
   if (sc.fog !== fogSource) { fogSource = sc.fog; fogPattern = sc.fog ? ctx.createPattern(sc.fog, 'repeat') : null }
   if (fogPattern) {
@@ -111,9 +115,16 @@ export function drawFields(ctx: CanvasRenderingContext2D, a: CanvasApi, world: W
     const t = (world.radius * 0.22 * K) / 256
     fogPattern.setTransform(new DOMMatrix([t, 0, 0, t, OX, OY]))
   }
-  // keep names out from under the minimap and the legend
+  // keep names out from under the minimap, the legend and the view's own controls
   board.add(w - 216, 0, w, 236)
   board.add(w / 2 - 300, h - 34, w / 2 + 300, h)
+  board.add(0, 0, 250, 56)
+}
+
+export function drawFields(ctx: CanvasRenderingContext2D, a: CanvasApi, world: World, geo: Geo, sc: Scene): void {
+  beginFrame(ctx, a, world, sc)
+  const { w, h } = a.size.current
+  const C = sc.C
 
   // ---- sea: rhumb lines from the Front Door, and range rings
   ctx.save()
@@ -177,43 +188,52 @@ export function drawFields(ctx: CanvasRenderingContext2D, a: CanvasApi, world: W
   }
 
   // ---- planted seeds glow gold
-  ctx.fillStyle = C['--gold']
-  const seedR = Math.max(4, 7 * Math.min(1, K)), coreR = Math.max(1.6, 2.6 * Math.min(1.5, K))
-  for (const p in sc.seeds) {
-    const at = world.index.get(p)
-    if (!at) continue
-    const x = at.x * K + OX, y = at.y * K + OY
-    if (x < -10 || x > w + 10 || y < -10 || y > h + 10) continue
-    ctx.globalAlpha = 0.25
-    ctx.beginPath(); ctx.arc(x, y, seedR, 0, Math.PI * 2); ctx.fill()
-    ctx.globalAlpha = 1
-    ctx.beginPath(); ctx.arc(x, y, coreR, 0, Math.PI * 2); ctx.fill()
-  }
+  drawSeeds(ctx, world.index, sc)
 
   // ---- the hovered plot answers with one soft ring
-  if (sc.hovered && sc.pulse >= 0) {
-    const p = sc.hovered
-    const x = p.x * K + OX, y = p.y * K + OY, R = p.r * K
-    const u = 1 - Math.pow(1 - sc.pulse, 3)
-    ctx.save()
-    ctx.strokeStyle = C['--gold']
-    ctx.globalAlpha = 0.55 * Math.pow(1 - sc.pulse, 1.4)
-    ctx.lineWidth = 1.6
-    ctx.beginPath(); ctx.arc(x, y, R + 3 + u * Math.min(18, 6 + R * 0.12), 0, Math.PI * 2); ctx.stroke()
-    ctx.restore()
-  }
+  if (sc.hovered && sc.pulse >= 0) drawPulse(ctx, sc.hovered.x, sc.hovered.y, sc.hovered.r, sc)
 
   // ---- the road of the active journey (its stops claim their room on the label board)
   const j = sc.activeJourney ? journeyById(sc.activeJourney) : undefined
-  if (j) drawRoad(ctx, j.stops, world, sc)
+  if (j) drawRoad(ctx, j.stops, world.index, sc)
 
   // ---- names: region titles, then plots by size, then grains
+  if (sc.names === 'none') return
   for (const li of geo.titleOrder) regionTitle(ctx, world.regions[li], C)
   const list = pool.slice(0, nL).sort(sortLabels)
   for (const L of list) {
     if (L.kind === 0) plotLabel(ctx, L, C)
     else grainLabel(ctx, L, C)
   }
+}
+
+/** Planted seeds (files read) glow gold wherever the view has set them. */
+export function drawSeeds(ctx: CanvasRenderingContext2D, index: Map<string, { x: number; y: number }>, sc: Scene) {
+  ctx.fillStyle = sc.C['--gold']
+  const seedR = Math.max(4, 7 * Math.min(1, K)), coreR = Math.max(1.6, 2.6 * Math.min(1.5, K))
+  for (const p in sc.seeds) {
+    const at = index.get(p)
+    if (!at) continue
+    const x = at.x * K + OX, y = at.y * K + OY
+    if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue
+    ctx.globalAlpha = 0.25
+    ctx.beginPath(); ctx.arc(x, y, seedR, 0, Math.PI * 2); ctx.fill()
+    ctx.globalAlpha = 1
+    ctx.beginPath(); ctx.arc(x, y, coreR, 0, Math.PI * 2); ctx.fill()
+  }
+  ctx.globalAlpha = 1
+}
+
+/** One soft gold ring spreading from a circle in world coordinates (the hover answer). */
+export function drawPulse(ctx: CanvasRenderingContext2D, wx: number, wy: number, wr: number, sc: Scene) {
+  const x = wx * K + OX, y = wy * K + OY, R = wr * K
+  const u = 1 - Math.pow(1 - sc.pulse, 3)
+  ctx.save()
+  ctx.strokeStyle = sc.C['--gold']
+  ctx.globalAlpha = 0.55 * Math.pow(1 - sc.pulse, 1.4)
+  ctx.lineWidth = 1.6
+  ctx.beginPath(); ctx.arc(x, y, R + 3 + u * Math.min(18, 6 + R * 0.12), 0, Math.PI * 2); ctx.stroke()
+  ctx.restore()
 }
 
 // ------------------------------------------------------------------ islands
@@ -240,7 +260,7 @@ function drawWaves(ctx: CanvasRenderingContext2D, waves: Float32Array, cx: numbe
 }
 
 /** Mist over a room not yet walked; a clear, faintly lit field over one that has been. */
-function drawWeather(ctx: CanvasRenderingContext2D, room: Plot, sc: Scene) {
+export function drawWeather(ctx: CanvasRenderingContext2D, room: Plot, sc: Scene) {
   const x = room.x * K + OX, y = room.y * K + OY, R = room.r * K
   if (R < 3 || x + R < 0 || x - R > W || y + R < 0 || y - R > H) return
   const C = sc.C
@@ -256,6 +276,7 @@ function drawWeather(ctx: CanvasRenderingContext2D, room: Plot, sc: Scene) {
     ctx.restore()
     return
   }
+  if (sc.mist === false) return
   // the mist thins as you come close, so a room can always be read once you are inside it
   const near = Math.min(W, H)
   const thin = Math.min(1, Math.max(0, (1.5 * near - R) / (0.8 * near)))
@@ -335,7 +356,7 @@ function drawPlot(ctx: CanvasRenderingContext2D, p: Plot, accent: string, depth:
       ctx.ellipse(qx, qy, gr * 0.62, gr, g.a, 0, Math.PI * 2)
       ctx.fill()
       if (gr > 2.5) ctx.stroke()
-      if (named) {
+      if (named && sc.names !== 'places') {
         const L = pushLabel()
         L.kind = 1; L.text = g.name; L.sub = ''; L.x = qx; L.y = qy; L.r = gr; L.size = 11; L.depth = depth + 1; L.pr = -1
       }
@@ -352,7 +373,7 @@ function drawPlot(ctx: CanvasRenderingContext2D, p: Plot, accent: string, depth:
   }
 }
 
-function drawRoad(ctx: CanvasRenderingContext2D, stops: Array<{ path: string }>, world: World, sc: Scene) {
+export function drawRoad(ctx: CanvasRenderingContext2D, stops: Array<{ path: string }>, index: Map<string, { x: number; y: number }>, sc: Scene) {
   const C = sc.C
   ctx.save()
   ctx.strokeStyle = C['--invite']
@@ -361,7 +382,7 @@ function drawRoad(ctx: CanvasRenderingContext2D, stops: Array<{ path: string }>,
   ctx.beginPath()
   let px = 0, py = 0, first = true
   for (const st of stops) {
-    const p = world.index.get(st.path)
+    const p = index.get(st.path)
     if (!p) continue
     const x = p.x * K + OX, y = p.y * K + OY
     if (first) { ctx.moveTo(x, y); first = false }
@@ -374,7 +395,7 @@ function drawRoad(ctx: CanvasRenderingContext2D, stops: Array<{ path: string }>,
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   stops.forEach((st, i) => {
-    const p = world.index.get(st.path)
+    const p = index.get(st.path)
     if (!p) return
     const x = p.x * K + OX, y = p.y * K + OY
     const done = !!sc.seeds[st.path]
@@ -391,7 +412,7 @@ function drawRoad(ctx: CanvasRenderingContext2D, stops: Array<{ path: string }>,
 // ------------------------------------------------------------------ names
 
 /** A region's name set along a gentle arc over its island; under it, or beside it, when crowded. */
-function regionTitle(ctx: CanvasRenderingContext2D, land: World['regions'][number], C: Record<string, string>) {
+export function regionTitle(ctx: CanvasRenderingContext2D, land: World['regions'][number], C: Record<string, string>) {
   const Rs = land.r * K
   const cx = land.x * K + OX, cy = land.y * K + OY
   if (cx < -Rs * 2 - 400 || cx > W + Rs * 2 + 400) return
