@@ -25,6 +25,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Turn on GitHub Pages (first run only)
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - run: npm ci
       - name: Snapshot grain (tree, stamps, headers, links)
         run: npm run data:almanac
