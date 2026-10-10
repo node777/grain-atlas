@@ -10,3 +10,8 @@
 .tally-bars { display: flex; align-items: flex-end; gap: 1.5px; height: 54px; }
 .tally-bars div { flex: 1; background: var(--brass); border-radius: 2px 2px 0 0; min-height: 1px; }
 @media (max-width: 720px) { .heavens-tally { display: none; } }
+.heavens-tip { position: absolute; pointer-events: none; z-index: 5; max-width: 340px; padding: 9px 13px 10px; border-radius: var(--r3); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+.heavens-tip-title { font-style: italic; font-size: 16px; line-height: 1.25; color: #f4e9cf; }
+.heavens-tip-line { font-size: 14px; color: var(--gold); margin-top: 3px; }
+.heavens-tip-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #c9b998; margin-top: 6px; }
+.heavens-tip-path { font-size: 11px; margin-top: 2px; overflow-wrap: anywhere; }

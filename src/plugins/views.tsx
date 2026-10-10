@@ -7,6 +7,10 @@ import { Sky } from './sky/Sky'
 import { Journeys } from './journeys/Journeys'
 import { Bench } from './bench/Bench'
 import { Intro } from './intro/Intro'
+import { lazy, Suspense } from 'react'
+import type { ViewProps } from '@/core/registry'
+const FloorLazy = lazy(() => import('./floor/Floor').then((m) => ({ default: m.Floor })))
+const Floor = (p: ViewProps) => <Suspense fallback={<div className="empty">Sweeping the threshing floor…</div>}><FloorLazy {...p} /></Suspense>
 import { navigate } from '@/core/router'
 
 export const fieldsPlugin: AtlasPlugin = {
@@ -38,4 +42,9 @@ export const journeysPlugin: AtlasPlugin = {
 export const introPlugin: AtlasPlugin = {
   id: 'intro', title: 'Opening', description: 'Stars become seeds become grain become the map.',
   views: [{ id: 'intro', title: 'Opening', hint: '', kind: 'freeform', glyph: '', order: 99, component: Intro, hidden: true }],
+}
+
+export const floorPlugin: AtlasPlugin = {
+  id: 'floor', title: 'Threshing Floor', description: 'Work grain with its voices: talk, sow, sheaves, drafts, the Gauge.',
+  views: [{ id: 'floor', title: 'Floor', hint: 'work grain with its voices', kind: 'tool', glyph: '⚘', order: 6, component: Floor }],
 }

@@ -2,14 +2,28 @@
 
 *A grain is a tree you can hold.*
 
-An atlas and star chart of the [grain](https://github.com/grain-ww/grain) monorepo, built as a
-static site. It reads grain live from GitHub and shows it six ways:
+An atlas, star chart and workbench for the [grain](https://github.com/grain-ww/grain) monorepo,
+built as a static site. It reads grain live from GitHub, or from your own checkout. It works with
+grain's voices on the **Threshing Floor**, and shows the tree seven ways:
 - **Fields** -- the tree as land, one grain per file.
 - **Ledger** -- folders and files, sorted and searchable.
 - **Heavens** -- grain's history as a sky.
 - **Sky** -- an astrolabe that opens into a dome of real stars.
 - **Journeys** -- walks grain itself recommends.
 - **Bench** -- try formats, copy run lines, keep notes.
+- **Floor** -- the Threshing Floor, for working grain with its voices:
+  - talk with a voice;
+  - sow a seed and let a field of agents grow it;
+  - keep long memory in sheaves;
+  - review drafts;
+  - watch spend against the Gauge.
+
+The current voice also lives in the dock at the corner of every view. See [`docs/ADE.md`](docs/ADE.md).
+
+**Versions.** The atlas names the version you are reading the way grain does. The public seed is
+"incense", after its root commit subject; `grain-os/grain` is a pointer to it. You can switch to any
+fork, open a grain folder on your own computer (Chromium browsers), or connect through the bridge.
+See [`docs/research/versions.md`](docs/research/versions.md).
 
 Every timestamp in the atlas is read in Vedic terms and as a plain datetime. Click one to open the
 sky of that moment.
@@ -32,6 +46,15 @@ two calls; unauthenticated GitHub allows 60 an hour. A token in Settings raises 
 
 `npm run data:stars` rebuilds the sky data in `public/data/sky/` from HYG and Stellarium. It is
 already built and committed.
+
+## The bridge (Claude Code on your machine)
+
+```sh
+node scripts/bridge.mjs ~/grain     # prints a token; paste it under Floor > Keys
+```
+
+The bridge serves your checkout to the atlas and runs Claude Code headless in it, under your
+Claude Code login. It listens on 127.0.0.1 only and requires its token on every request.
 
 ## Deploy
 

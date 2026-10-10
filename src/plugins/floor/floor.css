@@ -1,0 +1,109 @@
+.floor { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
+.floor-head { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 18px clamp(16px, 3vw, 40px) 6px; }
+.floor-head h1 { font-weight: 400; font-style: italic; font-size: clamp(28px, 4vw, 42px); margin: 0; }
+.floor-head p { margin: 2px 0 0; }
+.floor-meta { display: grid; gap: 2px; font-size: 12.5px; color: var(--ink-2); text-align: right; align-content: end; }
+.floor-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px clamp(16px, 3vw, 40px); border-bottom: 1px solid var(--rule); }
+.floor-hint { margin: 10px clamp(16px, 3vw, 40px) 0; padding: 10px 14px; }
+.floor-body { flex: 1; overflow: auto; overflow-x: hidden; padding: 16px clamp(16px, 3vw, 40px) 120px; }
+.chip.go { border-color: var(--invite); color: var(--invite); justify-self: start; }
+.chip:disabled { opacity: .45; cursor: default; }
+
+/* talk */
+.talk { display: grid; grid-template-columns: 270px 1fr; gap: 18px; height: calc(100vh - 230px); min-height: 460px; }
+.talk-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.voice-roster { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.voice-pick { display: grid; justify-items: center; gap: 2px; background: none; border: 1px solid transparent; border-radius: var(--r2); padding: 4px 2px; cursor: pointer; font-family: var(--sans); font-size: 11px; color: var(--ink-2); }
+.voice-pick:hover { border-color: var(--rule); }
+.voice-pick.on { border-color: var(--brass); color: var(--gold); background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.thread-list { display: grid; gap: 4px; overflow: auto; align-content: start; }
+.thread-row { display: flex; align-items: center; border-radius: var(--r2); }
+.thread-row > button:first-child { flex: 1; display: grid; text-align: left; background: none; border: none; padding: 6px 8px; cursor: pointer; border-radius: var(--r2); min-width: 0; }
+.thread-row > button:first-child span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread-row.on > button:first-child, .thread-row > button:first-child:hover { background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.talk-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.talk-voice { display: flex; gap: 14px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--rule); }
+.talk-voice h2 { margin: 0; font-weight: 400; font-size: 26px; }
+.tone-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tone-chips span { font-family: var(--sans); font-size: 11.5px; padding: 1px 7px; border-radius: var(--r2); border: 1px solid var(--rule); color: var(--ink-2); }
+.talk-log { flex: 1; padding: 14px 4px; min-height: 0; }
+.talk-empty { max-width: 56ch; margin: 40px auto; text-align: center; }
+.talk-input { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.talk-input textarea { resize: vertical; font-family: var(--serif); font-size: 16px; }
+.context-meter { height: 4px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.context-meter > div { height: 100%; transition: width var(--settle) var(--ease); }
+
+/* conversation */
+.conversation { display: grid; gap: 16px; }
+.turn-reader { display: flex; justify-content: flex-end; }
+.turn-bubble { max-width: 72%; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r3) var(--r3) var(--r1) var(--r3); padding: 8px 12px; white-space: pre-wrap; }
+.turn-voice { display: flex; gap: 10px; align-items: flex-start; }
+.turn-body { min-width: 0; flex: 1; }
+.turn-who { font-size: 12.5px; color: var(--gold); margin-bottom: 2px; }
+.turn-prose { font-size: 16px; max-width: 74ch; }
+.turn-prose p { margin: 0 0 .6em; }
+.turn-notice { border-left: 3px solid var(--brass-dim); padding-left: 12px; color: var(--ink-2); font-style: italic; }
+.turn-thinking summary { cursor: pointer; font-size: 12px; }
+.turn-thinking .turn-prose { font-size: 14px; color: var(--ink-2); font-style: italic; }
+.turn-tools { display: grid; gap: 1px; margin: 4px 0 8px; }
+.tool-line summary { cursor: pointer; font-size: 12.5px; list-style: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tool-line summary::-webkit-details-marker { display: none; }
+.tool-line summary .mono { color: var(--sage); }
+.tool-line.err summary .mono { color: var(--red); }
+.tool-result { font-size: 11.5px; max-height: 220px; overflow: auto; background: var(--sky); color: #e9dcc0; padding: 8px 10px; border-radius: var(--r1); white-space: pre-wrap; margin: 4px 0; }
+.turn-hands { display: grid; gap: 4px; margin: 4px 0 8px; }
+.hand-card { border: 1px solid var(--rule); border-radius: var(--r2); padding: 4px 10px; background: color-mix(in srgb, var(--surface) 50%, transparent); }
+.hand-card summary { cursor: pointer; font-size: 13px; }
+.hand-dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: var(--weld); margin-right: 4px; }
+.hand-dot[data-done='true'] { background: var(--sage); }
+
+/* sow */
+.sow { display: grid; gap: 16px; max-width: 1060px; }
+.sow-plant { padding: 16px 18px; display: grid; gap: 10px; }
+.sow-plant h2, .sow-field h3 { margin: 0; font-weight: 400; }
+.sow-plant textarea { font-family: var(--serif); font-size: 16px; }
+.seed-ideas { display: flex; flex-wrap: wrap; gap: 4px; }
+.sow-dials { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.sow-field { padding: 14px 16px; display: grid; gap: 10px; }
+.sow-field-head { display: flex; gap: 12px; align-items: center; }
+.sow-plan { margin: 0; color: var(--ink-2); font-style: italic; }
+.furrows { display: grid; gap: 4px; }
+.furrow { border-bottom: 1px dashed var(--rule); }
+.furrow-row { display: flex; gap: 12px; align-items: flex-end; width: 100%; background: none; border: none; padding: 4px 0; cursor: pointer; color: inherit; font: inherit; }
+.furrow.grown .furrow-row > div > div:first-child { color: var(--gold); }
+.furrow.withered { opacity: .7; }
+.furrow.growing .furrow-stalk { animation: stalk-sway 2.4s ease-in-out infinite; transform-origin: 17px 54px; }
+@keyframes stalk-sway { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+@media (prefers-reduced-motion: reduce) { .furrow.growing .furrow-stalk { animation: none; } }
+.furrow-detail { padding: 6px 0 12px 46px; }
+.sow-log { font-size: 11.5px; max-height: 200px; overflow: auto; white-space: pre-wrap; color: var(--ink-2); }
+.harvest summary { cursor: pointer; }
+
+/* memory, drafts, gauge, voices, keys */
+.memory, .drafts, .gauge-panel, .voices-panel, .keys { display: grid; gap: 14px; max-width: 1100px; align-content: start; }
+.sheaf-list { display: grid; gap: 8px; max-width: 900px; }
+.sheaf { padding: 10px 14px; display: grid; gap: 4px; justify-items: start; }
+.draft { padding: 8px 12px; margin-bottom: 8px; }
+.change-list { display: grid; gap: 4px; }
+.change { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px; }
+.meter-bar { height: 10px; background: var(--rule); border-radius: 5px; overflow: hidden; margin-top: 4px; }
+.meter-bar > div { height: 100%; transition: width var(--settle) var(--ease); }
+.voice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px; }
+.voice-card { display: flex; gap: 12px; padding: 12px 14px; align-items: flex-start; }
+.voice-card.on { box-shadow: 0 0 0 1.5px var(--brass) inset; }
+.voice-card h3 { margin: 0; font-weight: 400; font-size: 22px; }
+.voice-phrase { font-style: italic; margin: 6px 0; color: var(--ink-2); font-size: 15px; }
+.seat-voice { display: grid; grid-template-columns: 1fr 220px; gap: 20px; padding: 16px 18px; }
+.seat-voice h2 { margin: 0 0 8px; font-weight: 400; }
+.seat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.seat-preview { display: grid; justify-items: center; align-content: center; gap: 6px; }
+.keys section { padding: 14px 16px; display: grid; gap: 10px; }
+.keys h2 { margin: 0; font-weight: 400; font-size: 22px; }
+.keys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+label.radio { display: flex; gap: 8px; align-items: baseline; font-size: 15px; }
+@media (max-width: 860px) {
+  .talk { grid-template-columns: 1fr; height: auto; }
+  .talk-side { max-height: 240px; }
+  .seat-voice { grid-template-columns: 1fr; }
+}

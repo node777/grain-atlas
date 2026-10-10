@@ -207,3 +207,40 @@ Everything below is direction, not promise.
 - Should the atlas follow `grain-ww/grain`, or the template at `grain-os/grain` that MAP.md names?
 - Is there a place grain considers its home meridian for charts, other than Ujjain?
 - Would the maintainer like the atlas to read the Linengrow palette seats once they are drawn?
+
+## 8. Phase two (2026-10-10): versions, voices, the Threshing Floor
+
+- **Versions** (`src/sources/`, [`docs/research/versions.md`](research/versions.md)). The atlas
+  names what you are reading the way grain does:
+  - the public seed by its root commit subject (**incense**);
+  - grain-os/grain as a pointer you can follow;
+  - forks by subject or hash;
+  - your own checkout as seed, ship (`grain-<aroma>`) or pier, with its git nib and
+    `GLOW_PROFILE.kyri` voice.
+
+  Open a local grain folder (File System Access API) to read and write it, or reach a checkout
+  through the bridge.
+- **Voices** (`src/voices/`, [`docs/research/voices.md`](research/voices.md)). Twelve of grain's
+  voices are seated, from Kyri, Kyli and the elders to the nested voices and Kyri's four faculties,
+  and you can seat your own. Each has a procedural face (head, eyes, brows, mouth, cheeks, crown,
+  element colour) that breathes, blinks, follows the pointer and talks. Page headers show the
+  writing voice's face.
+- **The Threshing Floor** ([`docs/ADE.md`](ADE.md)):
+  - **Talk**, with hands and threshing;
+  - **Sow**, the autonomous field;
+  - **Sheaves**, long memory;
+  - **Drafts and changes**;
+  - **the Gauge**, spend limits;
+  - **Voices** and **Keys**.
+
+  It runs on the Claude API from the page, or on Claude Code through `scripts/bridge.mjs`. The dock
+  puts the current voice on every view.
+- **Visual upgrades**:
+  - label collision avoidance on the map and in the sky;
+  - a minimap, fog of war for undiscovered rooms, hover pulses and keyboard travel;
+  - engraved-brass rete pointers and ecliptic degree ticks on the astrolabe;
+  - comet trails as the Heavens history plays.
+
+Next: Rishi in the page (the Bench plan), commits and PRs from the Floor for GitHub versions
+(token-authenticated), contributor nativities from public commit times, and the Linengrow palette
+seats drawn as themes.

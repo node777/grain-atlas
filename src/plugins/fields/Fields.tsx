@@ -1,21 +1,67 @@
 // The Fields: grain drawn as land. Regions are islands, rooms are fields furrowed in their
 // element's colour, folders are plots within plots, and every file is a single grain.
 // Rhumb lines run out from the Front Door the way a portolan chart's run from its rose.
+// Rooms you have not read in yet lie under a warm mist; reading a page there clears it.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@/core/store'
-import { navigate } from '@/core/router'
+import { navigate, getRoute } from '@/core/router'
 import type { ViewProps } from '@/core/registry'
 import { repo, stampOf, lookup } from '@/grain/repo'
 import { progress } from '@/grain/progress'
 import { journeyById } from '@/grain/quests'
-import { settings } from '@/core/settings'
-import { useCanvas, cssVar, type CanvasApi } from '@/ui/useCanvas'
+import { settings, prefersStill } from '@/core/settings'
+import { useCanvas, cssVar, type CanvasApi, type Camera } from '@/ui/useCanvas'
 import { Stamp } from '@/ui/Stamp'
 import { layoutWorld, type Plot, type World, type Grain } from './layout'
+import { buildGeo, drawFields, roomOfFile, roomOfPlot, type Geo } from './draw'
+import { Minimap, MINI_W, MINI_H } from './minimap'
 import './fields.css'
 
 interface Pick { plot?: Plot; grain?: Grain; regionName?: string }
+
+const PULSE_MS = 720
+const PAN_KEYS: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
+  a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1],
+}
+
+const hexA = (hex: string, a: number) => {
+  const h = hex.replace('#', '')
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+}
+
+/** A seamless tile of soft cloud, drawn once per mode and laid over unwalked rooms. */
+function fogTile(color: string): HTMLCanvasElement {
+  const N = 256
+  const c = document.createElement('canvas')
+  c.width = c.height = N
+  const g = c.getContext('2d')!
+  // a fixed little weather: the same clouds every time
+  let seed = 7
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 }
+  for (let i = 0; i < 46; i++) {
+    const x = rnd() * N, y = rnd() * N
+    const r = 18 + rnd() * 52
+    const a = 0.12 + rnd() * 0.22
+    for (const dx of [-N, 0, N]) for (const dy of [-N, 0, N]) {
+      const cx = x + dx, cy = y + dy
+      if (cx + r < 0 || cx - r > N || cy + r * 0.62 < 0 || cy - r * 0.62 > N) continue
+      // clouds lie long and low: a round puff squashed flat
+      g.save()
+      g.translate(cx, cy)
+      g.scale(1, 0.62)
+      const gr = g.createRadialGradient(0, 0, 0, 0, 0, r)
+      gr.addColorStop(0, hexA(color, a))
+      gr.addColorStop(1, hexA(color, 0))
+      g.fillStyle = gr
+      g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill()
+      g.restore()
+    }
+  }
+  return c
+}
 
 export function Fields({ route }: ViewProps) {
   const r = useStore(repo, (s) => ({ entries: s.entries, version: s.version, phase: s.phase }))
@@ -23,15 +69,31 @@ export function Fields({ route }: ViewProps) {
   const active = useStore(progress, (p) => p.activeJourney)
   const mode = useStore(settings, (s) => s.mode)
   const world = useMemo<World | null>(() => (r.entries.size > 1 ? layoutWorld(r.entries) : null), [r.version])
+  const geo = useMemo<Geo | null>(() => (world ? buildGeo(world) : null), [world])
+  const discovered = useMemo(() => {
+    const out = new Set<string>()
+    if (!geo) return out
+    for (const p in seeds) { const room = roomOfFile(p); if (geo.roomOf.has(room)) out.add(room) }
+    return out
+  }, [seeds, geo])
   const [hover, setHover] = useState<Pick & { x: number; y: number } | null>(null)
   const [selected, setSelected] = useState<Plot | null>(null)
   const colors = useRef<Record<string, string>>({})
+  const fog = useRef<HTMLCanvasElement | null>(null)
   const fitted = useRef(false)
+  const hoverPlot = useRef<Plot | null>(null)
+  const pulseT0 = useRef(0)
+  const lastFly = useRef<{ k: number; t: number }>({ k: 0, t: 0 })
+  const mini = useRef(new Minimap())
+  const miniRef = useRef<HTMLCanvasElement>(null)
+  const live = useRef({ world, geo, selected, entries: r.entries })
+  live.current = { world, geo, selected, entries: r.entries }
 
   useEffect(() => {
     const names = ['--page', '--surface', '--surface-2', '--ink', '--ink-2', '--ink-3', '--rule', '--brass', '--brass-dim', '--gold', '--star',
       '--el-aether', '--el-air', '--el-fire', '--el-water', '--el-earth', '--invite', '--madder']
     colors.current = Object.fromEntries(names.map((n) => [n, cssVar(n)]))
+    fog.current = fogTile(mode === 'stone' ? colors.current['--surface-2'] : colors.current['--ink-2'])
     api.redraw()
   }, [mode])
 
@@ -64,13 +126,47 @@ export function Fields({ route }: ViewProps) {
     return {}
   }
 
+  const fitK = (p: { r: number }, a: CanvasApi, share = 0.42) => {
+    const s = a.size.current
+    return Math.min(28, (Math.min(s.w, s.h) * share) / p.r)
+  }
+  const flyTo = (a: CanvasApi, to: Camera, ms = 1000) => {
+    lastFly.current = { k: to.k, t: performance.now() + (prefersStill() ? 0 : ms) }
+    a.flyTo(to, ms)
+  }
+
   const { ref, api } = useCanvas({
     minK: 0.02,
     maxK: 30,
-    draw: (ctx, a) => world && draw(ctx, a, world, colors.current, seeds, active, selected),
+    // keep drawing only while the hover ring is still spreading
+    get animate() { return hoverPlot.current !== null && !prefersStill() && performance.now() - pulseT0.current < PULSE_MS + 40 },
+    draw: (ctx, a, t) => {
+      if (!world || !geo) return
+      const still = prefersStill()
+      const u = (t - pulseT0.current) / PULSE_MS
+      drawFields(ctx, a, world, geo, {
+        C: colors.current, stone: mode === 'stone', seeds, activeJourney: active, selected,
+        hovered: hoverPlot.current, pulse: !still && hoverPlot.current && u >= 0 && u < 1 ? u : -1,
+        discovered, fog: fog.current,
+      })
+      if (miniRef.current) {
+        mini.current.draw(miniRef.current, world, geo, colors.current, discovered, a.camera.current, a.size.current,
+          `${r.version}|${mode}|${discovered.size}`)
+      }
+    },
     onHover: (sx, sy, a) => {
-      if (sx < 0) { setHover(null); return }
+      if (sx < 0) {
+        setHover(null)
+        if (hoverPlot.current) { hoverPlot.current = null; a.redraw() }
+        return
+      }
       const p = pickAt(sx, sy, a)
+      const plot = p.grain ? null : p.plot ?? null
+      if (plot !== hoverPlot.current) {
+        hoverPlot.current = plot
+        pulseT0.current = performance.now()
+        a.redraw()
+      }
       setHover(p.plot || p.regionName ? { ...p, x: sx, y: sy } : null)
     },
     onPick: (sx, sy, a) => {
@@ -78,8 +174,7 @@ export function Fields({ route }: ViewProps) {
       if (p.grain) { navigate('fields', '', { open: p.grain.path }); return }
       if (p.plot) {
         setSelected(p.plot)
-        const s = a.size.current
-        a.flyTo({ x: p.plot.x, y: p.plot.y, k: Math.min(28, (Math.min(s.w, s.h) * 0.42) / p.plot.r) })
+        flyTo(a, { x: p.plot.x, y: p.plot.y, k: fitK(p.plot, a) })
       }
     },
   })
@@ -88,7 +183,13 @@ export function Fields({ route }: ViewProps) {
   useEffect(() => {
     if (!world) return
     const s = api.size.current
-    const fit = { x: 0, y: 0, k: (Math.min(s.w, s.h) * 0.5) / world.radius }
+    // frame the land itself (not the empty sea out to the far ring), clear of the minimap
+    const b = geo!.bounds
+    const fit = {
+      x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2,
+      k: Math.min((s.w - 480) / (b.x1 - b.x0), (s.h - 140) / (b.y1 - b.y0), (Math.min(s.w, s.h) * 1.1) / world.radius),
+    }
+    if (fit.k <= 0) fit.k = (Math.min(s.w, s.h) * 0.5) / world.radius
     if (!fitted.current) {
       api.camera.current = { ...fit, k: fit.k * 0.6 }
       api.flyTo(fit, 1000)
@@ -105,23 +206,163 @@ export function Fields({ route }: ViewProps) {
       api.flyTo({ x: at.x, y: at.y, k: Math.min(20, Math.max(1.2, (Math.min(s.w, s.h) * 0.12) / at.r)) })
     }
   }, [world, route.params.focus, route.params.open])
-  useEffect(() => api.redraw(), [seeds, active, selected])
+  useEffect(() => api.redraw(), [seeds, active, selected, discovered])
+
+  // keyboard: arrows or WASD wander, +/- zoom, Enter reads a plot's door, Escape lets go
+  useEffect(() => {
+    const held = new Set<string>()
+    let raf = 0, last = 0
+    const step = (t: number) => {
+      const dt = Math.min(0.05, (t - last) / 1000)
+      last = t
+      let dx = 0, dy = 0
+      for (const key of held) { const v = PAN_KEYS[key]; if (v) { dx += v[0]; dy += v[1] } }
+      if (dx || dy) {
+        const c = api.camera.current
+        const sp = (640 * dt) / c.k / (dx && dy ? Math.SQRT2 : 1)
+        c.x += dx * sp
+        c.y += dy * sp
+        api.redraw()
+      }
+      raf = held.size ? requestAnimationFrame(step) : 0
+    }
+    const busy = (t: EventTarget | null, enter: boolean) =>
+      t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || (enter && /^(BUTTON|A|SUMMARY)$/.test(t.tagName)))
+    const zoomBy = (f: number) => {
+      const c = api.camera.current
+      api.flyTo({ x: c.x, y: c.y, k: Math.max(0.02, Math.min(30, c.k * f)) }, 240)
+    }
+    const centrePlot = (): Plot | undefined => {
+      const s = api.size.current
+      return pickAt(s.w / 2, s.h / 2, api).plot
+    }
+    const onDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (getRoute().params.open) return             // the reader is open: its keys, not ours
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key
+      if (busy(e.target, key === 'Enter')) return
+      if (PAN_KEYS[key]) {
+        e.preventDefault()
+        if (!held.has(key)) held.add(key)
+        if (!raf) { last = performance.now(); raf = requestAnimationFrame(step) }
+        return
+      }
+      if (key === '+' || key === '=') { e.preventDefault(); zoomBy(1.5); return }
+      if (key === '-' || key === '_') { e.preventDefault(); zoomBy(1 / 1.5); return }
+      if (key === 'Escape') { setSelected(null); return }
+      if (key === 'Enter') {
+        const plot = hoverPlot.current ?? live.current.selected ?? centrePlot()
+        if (!plot) return
+        e.preventDefault()
+        const readme = live.current.entries.get(plot.path)?.children.find((c) => /(^|\/)README\.md$/i.test(c))
+        if (readme) navigate('fields', '', { open: readme })
+        else { setSelected(plot); flyTo(api, { x: plot.x, y: plot.y, k: fitK(plot, api) }) }
+      }
+    }
+    const onUp = (e: KeyboardEvent) => { held.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key) }
+    const onBlur = () => held.clear()
+    window.addEventListener('keydown', onDown)
+    window.addEventListener('keyup', onUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('keydown', onDown)
+      window.removeEventListener('keyup', onUp)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [world])
+
+  // double-click: go one plot deeper under the pointer
+  useEffect(() => {
+    const cv = ref.current
+    if (!cv) return
+    const onDbl = (e: MouseEvent) => {
+      const w = live.current.world
+      if (!w) return
+      const rect = cv.getBoundingClientRect()
+      const sx = e.clientX - rect.left, sy = e.clientY - rect.top
+      const at = api.toWorld(sx, sy)
+      // a flight from the first click may still be under way: measure against where it lands
+      const now = performance.now()
+      const k = Math.max(api.camera.current.k, now < lastFly.current.t + 200 ? lastFly.current.k : 0)
+      let level: Plot[] = []
+      for (const land of w.regions) if (Math.hypot(at.x - land.x, at.y - land.y) <= land.r * 1.25) level = land.rooms
+      let target: Plot | undefined
+      while (level.length) {
+        const hit = level.find((p) => Math.hypot(at.x - p.x, at.y - p.y) <= p.r)
+        if (!hit) break
+        if (fitK(hit, api, 0.46) > k * 1.3) { target = hit; break }
+        level = hit.children
+      }
+      if (target) {
+        setSelected(target)
+        flyTo(api, { x: target.x, y: target.y, k: fitK(target, api, 0.46) }, 700)
+      } else {
+        flyTo(api, { x: at.x, y: at.y, k: Math.min(30, k * 2) }, 500)
+      }
+    }
+    cv.addEventListener('dblclick', onDbl)
+    return () => cv.removeEventListener('dblclick', onDbl)
+  }, [])
+
+  // the minimap: press or drag to carry the view there
+  useEffect(() => {
+    const cv = miniRef.current
+    if (!cv) return
+    let down = false
+    const go = (e: PointerEvent) => {
+      const rect = cv.getBoundingClientRect()
+      const p = mini.current.toWorld((e.clientX - rect.left) * (MINI_W / rect.width), (e.clientY - rect.top) * (MINI_H / rect.height))
+      api.flyTo({ ...api.camera.current, x: p.x, y: p.y }, 0)
+    }
+    const onDown = (e: PointerEvent) => { down = true; cv.setPointerCapture(e.pointerId); go(e) }
+    const onMove = (e: PointerEvent) => { if (down) go(e) }
+    const onUp = () => { down = false }
+    cv.addEventListener('pointerdown', onDown)
+    cv.addEventListener('pointermove', onMove)
+    cv.addEventListener('pointerup', onUp)
+    cv.addEventListener('pointercancel', onUp)
+    return () => {
+      cv.removeEventListener('pointerdown', onDown)
+      cv.removeEventListener('pointermove', onMove)
+      cv.removeEventListener('pointerup', onUp)
+      cv.removeEventListener('pointercancel', onUp)
+    }
+  }, [world])
 
   const journey = active ? journeyById(active) : undefined
+  const total = geo?.rooms.length ?? 0
+  const view = api.size.current
+  const tipStyle = hover
+    ? {
+      left: hover.x > view.w - 320 ? undefined : hover.x + 14,
+      right: hover.x > view.w - 320 ? view.w - hover.x + 14 : undefined,
+      top: hover.y > view.h - 120 ? undefined : hover.y + 14,
+      bottom: hover.y > view.h - 120 ? view.h - hover.y + 14 : undefined,
+    }
+    : undefined
+  const misted = hover?.plot && !hover.grain && !discovered.has(roomOfPlot(hover.plot.path))
 
   return (
     <div className="fields">
-      <canvas ref={ref} className="fields-canvas" aria-label="The map of grain: regions, rooms and files" />
+      <canvas ref={ref} className="fields-canvas" tabIndex={0}
+        aria-label="The map of grain: regions, rooms and files. Arrow keys or WASD to wander, plus and minus to zoom, Enter to read the plot's door." />
       {!world && <div className="fields-wait">{r.phase === 'error' ? 'The tree could not be read.' : 'Sowing the map…'}</div>}
       {hover && (
-        <div className="fields-tip panel linen-fine" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+        <div className="fields-tip panel linen-fine" style={tipStyle}>
           {hover.grain
             ? <><div className="mono" style={{ fontSize: 12.5 }}>{hover.grain.path}</div>
               {lookup(hover.grain.path)?.meta?.title && <div style={{ fontStyle: 'italic' }}>{lookup(hover.grain.path)!.meta!.title}</div>}</>
             : hover.plot
               ? <><div><b style={{ fontWeight: 600 }}>{hover.plot.path || 'the root'}</b> <span className="faint">{hover.plot.files} files</span></div>
-                <div className="faint sans" style={{ fontSize: 12 }}>{hover.regionName}</div></>
-              : <div>{hover.regionName}</div>}
+                <div className="faint sans" style={{ fontSize: 12 }}>{hover.regionName}</div>
+                {misted && <div className="fields-tip-mist sans">Under mist until you read a page here</div>}</>
+              : <div style={{ fontStyle: 'italic' }}>{hover.regionName}</div>}
+        </div>
+      )}
+      {world && (
+        <div className="fields-mini panel linen-fine">
+          <canvas ref={miniRef} style={{ width: MINI_W, height: MINI_H }} aria-label="Minimap: press or drag to move the view" />
         </div>
       )}
       {selected && <Inspector plot={selected} onClose={() => setSelected(null)} />}
@@ -139,7 +380,15 @@ export function Fields({ route }: ViewProps) {
           <button className="ascii-btn" onClick={() => progress.set({ activeJourney: undefined })}>[ leave the road ]</button>
         </div>
       )}
-      <div className="fields-legend sans faint">one grain is one file -- scroll to zoom, drag to wander</div>
+      <div className="fields-legend sans">
+        {total > 0 && (
+          <span className="fields-found" title="A room clears once you have read a page in it">
+            <svg width="9" height="13" viewBox="0 0 9 13" aria-hidden="true"><ellipse cx="4.5" cy="6.5" rx="3.2" ry="5.4" /></svg>
+            {discovered.size} of {total} rooms walked
+          </span>
+        )}
+        <span className="faint">one grain is one file; drag or use the arrows to wander, scroll or +/- to zoom</span>
+      </div>
     </div>
   )
 }
@@ -166,7 +415,7 @@ function Inspector({ plot, onClose }: { plot: Plot; onClose: () => void }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         <span className="sans faint" style={{ fontSize: 12 }}>{plot.region.name}</span>
         <span style={{ flex: 1 }} />
-        <button className="ascii-btn" onClick={onClose}>[ x ]</button>
+        <button className="ascii-btn" onClick={onClose} aria-label="Close (Escape)">[ x ]</button>
       </div>
       <h2 style={{ margin: '2px 0 4px', fontWeight: 400, fontSize: 26 }}>{plot.path || 'the root'}</h2>
       <p className="muted" style={{ margin: '0 0 10px', fontSize: 15 }}>{plot.region.motto}</p>
@@ -182,236 +431,10 @@ function Inspector({ plot, onClose }: { plot: Plot; onClose: () => void }) {
         </div>
       )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {readme && <a className="chip" href={`#/fields?open=${encodeURIComponent(readme)}`}>Read its door</a>}
+        {readme && <a className="chip" href={`#/fields?open=${encodeURIComponent(readme)}`}>Read its door <span className="kbd">Enter</span></a>}
         <a className="chip" href={`#/ledger/${plot.path}`}>Open in the ledger</a>
         <a className="chip" href={`#/heavens?room=${encodeURIComponent(plot.path)}`}>See its stars</a>
       </div>
     </div>
   )
-}
-
-// ------------------------------------------------------------------ drawing
-
-function draw(
-  ctx: CanvasRenderingContext2D, a: CanvasApi, world: World, C: Record<string, string>,
-  seeds: Record<string, number>, activeJourney: string | undefined, selected: Plot | null,
-) {
-  const { w, h } = a.size.current
-  const cam = a.camera.current
-  const k = cam.k
-  const S = (x: number, y: number) => a.toScreen(x, y)
-  const visible = (x: number, y: number, r: number) => {
-    const p = S(x, y)
-    return p.x + r * k > -20 && p.x - r * k < w + 20 && p.y + r * k > -20 && p.y - r * k < h + 20
-  }
-
-  // sea: rhumb lines from the Front Door, and range rings
-  const o = S(0, 0)
-  ctx.save()
-  ctx.strokeStyle = C['--rule']
-  ctx.globalAlpha = 0.5
-  ctx.lineWidth = 0.6
-  ctx.setLineDash([2, 6])
-  for (let i = 0; i < 32; i++) {
-    const t = (i / 32) * Math.PI * 2
-    ctx.beginPath()
-    ctx.moveTo(o.x, o.y)
-    ctx.lineTo(o.x + Math.cos(t) * 4000, o.y + Math.sin(t) * 4000)
-    ctx.stroke()
-  }
-  ctx.setLineDash([])
-  for (let i = 1; i <= 4; i++) {
-    ctx.beginPath()
-    ctx.arc(o.x, o.y, world.radius * 0.36 * i * k, 0, Math.PI * 2)
-    ctx.stroke()
-  }
-  ctx.restore()
-
-  // land
-  for (const land of world.regions) {
-    if (!visible(land.x, land.y, land.r * 1.3)) continue
-    const accent = C[`--el-${land.region.element}`]
-    const path = new Path2D()
-    land.hull.forEach(([x, y], i) => {
-      const p = S(x, y)
-      if (i === 0) path.moveTo(p.x, p.y)
-      else path.lineTo(p.x, p.y)
-    })
-    path.closePath()
-    // contour rings, like soundings around an island
-    for (let ring = 3; ring >= 1; ring--) {
-      ctx.save()
-      const s = 1 + ring * 0.035
-      const c = S(land.x, land.y)
-      ctx.translate(c.x, c.y)
-      ctx.scale(s, s)
-      ctx.translate(-c.x, -c.y)
-      ctx.strokeStyle = accent
-      ctx.globalAlpha = 0.12 / ring + 0.04
-      ctx.lineWidth = 1 / s
-      ctx.stroke(path)
-      ctx.restore()
-    }
-    ctx.fillStyle = C['--surface']
-    ctx.globalAlpha = 0.55
-    ctx.fill(path)
-    ctx.globalAlpha = 1
-    ctx.strokeStyle = accent
-    ctx.globalAlpha = 0.55
-    ctx.lineWidth = 1.2
-    ctx.stroke(path)
-    ctx.globalAlpha = 1
-
-    for (const room of land.rooms) drawPlot(ctx, a, room, accent, C, 0, selected)
-  }
-
-  // planted seeds glow gold
-  ctx.fillStyle = C['--gold']
-  for (const p of Object.keys(seeds)) {
-    const at = world.index.get(p)
-    if (!at) continue
-    const s = S(at.x, at.y)
-    if (s.x < -10 || s.x > w + 10 || s.y < -10 || s.y > h + 10) continue
-    ctx.globalAlpha = 0.25
-    ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(4, 7 * Math.min(1, k)), 0, Math.PI * 2); ctx.fill()
-    ctx.globalAlpha = 1
-    ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(1.6, 2.6 * Math.min(1.5, k)), 0, Math.PI * 2); ctx.fill()
-  }
-
-  // the road of the active journey
-  const j = activeJourney ? journeyById(activeJourney) : undefined
-  if (j) {
-    const pts = j.stops.map((s) => world.index.get(s.path)).filter(Boolean) as Array<{ x: number; y: number }>
-    ctx.save()
-    ctx.strokeStyle = C['--invite']
-    ctx.lineWidth = 2
-    ctx.setLineDash([6, 6])
-    ctx.beginPath()
-    pts.forEach((p, i) => {
-      const s = S(p.x, p.y)
-      if (i === 0) ctx.moveTo(s.x, s.y)
-      else {
-        const prev = S(pts[i - 1].x, pts[i - 1].y)
-        const mx = (prev.x + s.x) / 2 + (s.y - prev.y) * 0.18
-        const my = (prev.y + s.y) / 2 - (s.x - prev.x) * 0.18
-        ctx.quadraticCurveTo(mx, my, s.x, s.y)
-      }
-    })
-    ctx.stroke()
-    ctx.setLineDash([])
-    j.stops.forEach((st, i) => {
-      const p = world.index.get(st.path)
-      if (!p) return
-      const s = S(p.x, p.y)
-      ctx.fillStyle = seeds[st.path] ? C['--gold'] : C['--page']
-      ctx.strokeStyle = C['--invite']
-      ctx.lineWidth = 2
-      ctx.beginPath(); ctx.arc(s.x, s.y, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
-      ctx.fillStyle = seeds[st.path] ? C['--page'] : C['--invite']
-      ctx.font = '600 11px "Public Sans", sans-serif'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(String(i + 1), s.x, s.y + 0.5)
-    })
-    ctx.restore()
-  }
-
-  // region names, cartographer's italic
-  for (const land of world.regions) {
-    const top = S(land.x, land.y - land.r * 1.02)
-    const size = Math.max(13, Math.min(34, land.r * k * 0.16))
-    if (top.y < -40 || top.y > h + 40) continue
-    ctx.font = `italic ${size}px Vollkorn, Georgia, serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'bottom'
-    ctx.fillStyle = C['--ink']
-    ctx.globalAlpha = land.r * k > 900 ? 0.35 : 0.92
-    ctx.fillText(land.region.name, top.x, top.y)
-    ctx.globalAlpha = 1
-  }
-}
-
-function drawPlot(ctx: CanvasRenderingContext2D, a: CanvasApi, p: Plot, accent: string, C: Record<string, string>, depth: number, selected: Plot | null) {
-  const k = a.camera.current.k
-  const { w, h } = a.size.current
-  const s = a.toScreen(p.x, p.y)
-  const R = p.r * k
-  if (s.x + R < -10 || s.x - R > w + 10 || s.y + R < -10 || s.y - R > h + 10) return
-  if (R < 1.2) {
-    ctx.fillStyle = accent
-    ctx.fillRect(s.x - 0.8, s.y - 0.8, 1.6, 1.6)
-    return
-  }
-  // the field: a rounded plot with furrows
-  ctx.save()
-  ctx.beginPath()
-  ctx.arc(s.x, s.y, R, 0, Math.PI * 2)
-  ctx.fillStyle = depth === 0 ? C['--page'] : C['--surface-2']
-  ctx.globalAlpha = depth === 0 ? 0.85 : 0.5
-  ctx.fill()
-  ctx.globalAlpha = 1
-  ctx.clip()
-  const gap = Math.max(4, Math.min(9, R / 6))
-  ctx.strokeStyle = accent
-  ctx.globalAlpha = depth === 0 ? 0.32 : 0.22
-  ctx.lineWidth = 1
-  ctx.translate(s.x, s.y)
-  ctx.rotate(p.furrow)
-  ctx.beginPath()
-  for (let x = -R; x <= R; x += gap) { ctx.moveTo(x, -R); ctx.lineTo(x, R) }
-  ctx.stroke()
-  ctx.restore()
-
-  ctx.beginPath()
-  ctx.arc(s.x, s.y, R, 0, Math.PI * 2)
-  ctx.strokeStyle = selected === p ? C['--gold'] : accent
-  ctx.lineWidth = selected === p ? 2.4 : depth === 0 ? 1.4 : 0.9
-  ctx.globalAlpha = 0.85
-  ctx.stroke()
-  ctx.globalAlpha = 1
-
-  // inside: sub-plots once there is room, grains once they can be seen
-  if (R > 34) for (const c of p.children) drawPlot(ctx, a, c, accent, C, depth + 1, selected)
-  if (R > 46 && p.grains.length) {
-    const gr = Math.max(1.2, Math.min(4.5, 2.2 * k))
-    ctx.fillStyle = C['--gold']
-    ctx.strokeStyle = C['--brass-dim']
-    ctx.lineWidth = 0.6
-    for (const g of p.grains) {
-      const q = a.toScreen(g.x, g.y)
-      if (q.x < -6 || q.x > w + 6 || q.y < -6 || q.y > h + 6) continue
-      ctx.beginPath()
-      ctx.ellipse(q.x, q.y, gr * 0.62, gr, g.a, 0, Math.PI * 2)
-      ctx.fill()
-      if (gr > 2.5) ctx.stroke()
-    }
-    if (gr > 3.6) {
-      ctx.font = '11px "Source Code Pro", monospace'
-      ctx.fillStyle = C['--ink-2']
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'middle'
-      for (const g of p.grains) {
-        const q = a.toScreen(g.x, g.y)
-        if (q.x < -60 || q.x > w || q.y < 0 || q.y > h) continue
-        ctx.fillText(g.path.split('/').pop()!.slice(0, 34), q.x + gr + 4, q.y)
-      }
-    }
-  }
-
-  // label
-  if (R > 16) {
-    const size = depth === 0 ? Math.max(11, Math.min(20, R * 0.2)) : Math.max(10, Math.min(15, R * 0.16))
-    ctx.font = `${depth === 0 ? 600 : 400} ${size}px "Public Sans", sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    const label = p.name + (p.files > 1 ? ` ${p.files}` : '')
-    const ly = R > 140 ? s.y - R + size * 1.4 : s.y
-    ctx.lineWidth = 3
-    ctx.strokeStyle = C['--page']
-    ctx.globalAlpha = 0.9
-    ctx.strokeText(label, s.x, ly)
-    ctx.globalAlpha = 1
-    ctx.fillStyle = C['--ink']
-    ctx.fillText(label, s.x, ly)
-  }
 }

@@ -7,9 +7,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@/core/store'
 import { navigate } from '@/core/router'
 import type { ViewProps } from '@/core/registry'
-import { settings } from '@/core/settings'
+import { settings, prefersStill } from '@/core/settings'
 import { repo, stampOf } from '@/grain/repo'
-import { REGIONS, regionOf } from '@/grain/rooms'
+import { REGIONS, regionOf, regionById } from '@/grain/rooms'
 import { quickMoment, quickLine, plainDate } from '@/astro/describe'
 import { NAKSHATRAS } from '@/astro/data/nakshatras'
 import { useCanvas, cssVar, type CanvasApi } from '@/ui/useCanvas'
@@ -20,6 +20,14 @@ import './heavens.css'
 interface HStar { path: string; t: number; angle: number; size: number; region: string; element: string; nak: number; room: string }
 
 const R_IN = 90, R_OUT = 900
+const TRAILS = 160                  // at most this many comets in the sky at once
+const MONTH_ANGLES = [-90, -80, -100, -70, -110, -60, -120, -50, -130].map((d) => (d * Math.PI) / 180)
+
+const hexA = (hex: string, a: number) => {
+  const h = hex.replace('#', '')
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+}
 
 export function Heavens({ route }: ViewProps) {
   const r = useStore(repo, (s) => ({ entries: s.entries, version: s.version }))
@@ -158,11 +166,18 @@ export function Heavens({ route }: ViewProps) {
       ctx.fillText(NAKSHATRAS[i]?.name ?? '', 0, 0)
       ctx.restore()
     }
-    // month rings: each new month of grain's life is a circle
+    // month rings: each new month of grain's life is a circle. Names sit on the ring's crown,
+    // or step along it when an earlier month already holds that spot
     ctx.font = '11px "Source Code Pro", monospace'
-    ctx.fillStyle = 'rgba(200, 153, 47, 0.6)'
-    ctx.textAlign = 'left'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    const placed: number[] = []
+    const free = (x0: number, y0: number, x1: number, y1: number) => {
+      for (let i = 0; i < placed.length; i += 4) if (x0 < placed[i + 2] && x1 > placed[i] && y0 < placed[i + 3] && y1 > placed[i + 1]) return false
+      return true
+    }
     const d0 = new Date(data.t0)
+    const months: Array<{ rr: number; text: string }> = []
     for (let m = 0; m < 48; m++) {
       const d = new Date(d0.getFullYear(), d0.getMonth() + m + 1, 1)
       if (d.getTime() > data.t1) break
@@ -171,7 +186,29 @@ export function Heavens({ route }: ViewProps) {
       ctx.setLineDash([2, 6])
       ctx.beginPath(); ctx.arc(o.x, o.y, rr, 0, Math.PI * 2); ctx.stroke()
       ctx.setLineDash([])
-      ctx.fillText(d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' }), o.x + 4, o.y - rr - 3)
+      months.push({ rr, text: d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) })
+    }
+    // the newest months first: they have the widest rings, and are the ones most looked for
+    for (let i = months.length - 1; i >= 0; i--) {
+      const { rr, text } = months[i]
+      const tw = ctx.measureText(text).width
+      for (const a of MONTH_ANGLES) {
+        const x = o.x + Math.cos(a) * rr, y = o.y + Math.sin(a) * rr
+        const x0 = x - tw / 2 - 4, y0 = y - 13, x1 = x + tw / 2 + 4, y1 = y + 2
+        if (!free(x0, y0, x1, y1)) continue
+        placed.push(x0, y0, x1, y1)
+        ctx.fillStyle = 'rgba(16, 13, 10, 0.72)'
+        ctx.beginPath(); ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 4); ctx.fill()
+        ctx.fillStyle = 'rgba(200, 153, 47, 0.8)'
+        ctx.fillText(text, x, y - 2)
+        break
+      }
+    }
+    // while the history plays (or is held part way), the front of time is a faint brass ring
+    if (until < 1) {
+      ctx.strokeStyle = 'rgba(217, 180, 90, 0.38)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.arc(o.x, o.y, radiusOf(cutoff) * k, 0, Math.PI * 2); ctx.stroke()
     }
     // the seed at the centre
     ctx.fillStyle = C['--gold']
@@ -197,6 +234,38 @@ export function Heavens({ route }: ViewProps) {
       ctx.stroke()
     }
 
+    // comets: the newest stars, while the history plays, trail light back toward the seed
+    const freshSpan = (data.t1 - data.t0) * 0.05
+    const trails = playing && !prefersStill()
+    if (trails) {
+      ctx.save()
+      ctx.lineCap = 'round'
+      let drawnTrails = 0
+      for (let i = data.stars.length - 1; i >= 0 && drawnTrails < TRAILS; i--) {
+        const s = data.stars[i]
+        if (s.t > cutoff) continue
+        const age = (cutoff - s.t) / freshSpan
+        if (age >= 1) break
+        if (!visible(s)) continue
+        const p = pos(s)
+        const q = a.toScreen(p.x, p.y)
+        if (q.x < -40 || q.x > w + 40 || q.y < -40 || q.y > h + 40) continue
+        const f = 1 - age
+        const dx = o.x - q.x, dy = o.y - q.y, d = Math.hypot(dx, dy) || 1
+        const len = (8 + 34 * f) * Math.min(1.6, Math.max(0.7, k * 2))
+        const tx = q.x + (dx / d) * len, ty = q.y + (dy / d) * len
+        const col = C[`--el-${s.element}`] || '#f6ead0'
+        const lg = ctx.createLinearGradient(q.x, q.y, tx, ty)
+        lg.addColorStop(0, hexA(col, 0.55 * f))
+        lg.addColorStop(1, hexA(col, 0))
+        ctx.strokeStyle = lg
+        ctx.lineWidth = 0.8 + 1.3 * f
+        ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(tx, ty); ctx.stroke()
+        drawnTrails++
+      }
+      ctx.restore()
+    }
+
     // the stars
     for (const s of data.stars) {
       if (!visible(s)) continue
@@ -205,17 +274,27 @@ export function Heavens({ route }: ViewProps) {
       if (q.x < -5 || q.x > w + 5 || q.y < -5 || q.y > h + 5) continue
       const dim = lineRoom !== undefined && s.room !== lineRoom
       const rad = Math.max(0.9, (s.size - 1.6) * 0.9 * Math.sqrt(Math.max(0.6, k * 2)))
-      const fresh = playing && cutoff - s.t < (data.t1 - data.t0) * 0.02
+      const f = playing ? 1 - (cutoff - s.t) / freshSpan : 0
       ctx.fillStyle = C[`--el-${s.element}`] || '#f6ead0'
       ctx.globalAlpha = dim ? 0.18 : 0.92
-      ctx.beginPath(); ctx.arc(q.x, q.y, fresh ? rad * 2.2 : rad, 0, Math.PI * 2); ctx.fill()
+      ctx.beginPath(); ctx.arc(q.x, q.y, f > 0 ? rad * (1 + 1.1 * f) : rad, 0, Math.PI * 2); ctx.fill()
+      if (f > 0.5) {
+        // a bright head on the newest
+        ctx.fillStyle = '#f6ead0'
+        ctx.globalAlpha = (f - 0.5) * 1.6
+        ctx.beginPath(); ctx.arc(q.x, q.y, rad * 0.6, 0, Math.PI * 2); ctx.fill()
+      }
       ctx.globalAlpha = 1
     }
     if (hover) {
       const p = pos(hover.s)
       const q = a.toScreen(p.x, p.y)
-      ctx.strokeStyle = '#f6ead0'
-      ctx.beginPath(); ctx.arc(q.x, q.y, 8, 0, Math.PI * 2); ctx.stroke()
+      ctx.strokeStyle = 'rgba(246, 234, 208, 0.9)'
+      ctx.lineWidth = 1.2
+      ctx.beginPath(); ctx.arc(q.x, q.y, 7, 0, Math.PI * 2); ctx.stroke()
+      ctx.strokeStyle = 'rgba(217, 180, 90, 0.35)'
+      ctx.lineWidth = 1
+      ctx.beginPath(); ctx.arc(q.x, q.y, 11, 0, Math.PI * 2); ctx.stroke()
     }
   }
 
@@ -247,14 +326,26 @@ export function Heavens({ route }: ViewProps) {
         </div>
         {room !== undefined && <div className="sans" style={{ fontSize: 13, marginTop: 6 }}>Constellation of <b>{room || 'the root'}</b> <button className="ascii-btn" onClick={() => navigate('heavens')}>[ clear ]</button></div>}
       </div>
-      {hs && hq && hover && (
-        <div className="fields-tip panel linen-fine" style={{ left: hover.x + 14, top: hover.y + 14, position: 'absolute' }}>
-          <div style={{ fontStyle: 'italic' }}>{r.entries.get(hs.path)?.meta?.title ?? sprigOf(hs.path)}</div>
-          <div className="mono faint" style={{ fontSize: 11.5 }}>{hs.path}</div>
-          <div style={{ fontSize: 14 }}>{quickLine(hq)}</div>
-          <div className="mono faint" style={{ fontSize: 11.5 }}>{plainDate(new Date(hs.t))}</div>
-        </div>
-      )}
+      {hs && hq && hover && (() => {
+        const view = api.size.current
+        const flipX = hover.x > view.w - 340, flipY = hover.y > view.h - 150
+        const region = regionById(hs.region)
+        return (
+          <div className="heavens-tip panel" style={{
+            left: flipX ? undefined : hover.x + 16, right: flipX ? view.w - hover.x + 16 : undefined,
+            top: flipY ? undefined : hover.y + 16, bottom: flipY ? view.h - hover.y + 16 : undefined,
+          }}>
+            <div className="heavens-tip-title">{r.entries.get(hs.path)?.meta?.title ?? sprigOf(hs.path)}</div>
+            <div className="heavens-tip-line">{quickLine(hq)}</div>
+            <div className="heavens-tip-meta sans">
+              <span className="swatch" style={{ background: `var(--el-${hs.element})` }} />
+              {region?.name ?? 'Uncharted'}, in {hs.room || 'the root'}
+            </div>
+            <div className="mono faint heavens-tip-path">{hs.path}</div>
+            <div className="mono faint heavens-tip-path">{plainDate(new Date(hs.t))}</div>
+          </div>
+        )
+      })()}
       <Ledgerette stars={data.stars} cutoff={cutoff} />
     </div>
   )

@@ -9,6 +9,8 @@ import type { ViewProps } from '@/core/registry'
 import { JOURNEYS, type Journey } from '@/grain/quests'
 import { progress } from '@/grain/progress'
 import { repo } from '@/grain/repo'
+import { Character } from '@/voices/Character'
+import { voiceById } from '@/voices/voices'
 import './journeys.css'
 
 export function Journeys(_: ViewProps) {
@@ -33,6 +35,17 @@ export function Journeys(_: ViewProps) {
   return (
     <div className="journeys linen scroll">
       <header className="journeys-head">
+        <div className="journeys-guide">
+          <Character look={voiceById('kyli').look} size={92} title="Kyli" />
+          <div className="guide-bubble panel linen-fine">
+            <div className="sans faint" style={{ fontSize: 12 }}>Kyli, who teaches the walks</div>
+            {planted === 0
+              ? <>Today's walk has a few plays. Finish one before you stack the next -- <b>Three Doors</b> is a good first.</>
+              : harvested > 0
+                ? <>{harvested} {harvested === 1 ? 'walk' : 'walks'} harvested. Pick the next road, or wander off it for a while.</>
+                : <>{planted} {planted === 1 ? 'seed' : 'seeds'} in the ground. Keep walking; the stalk fills one grain at a time.</>}
+          </div>
+        </div>
         <h1>Journeys</h1>
         <p className="muted">
           Walks through grain in the orders grain itself recommends. Reading a stop plants a seed in your field;

@@ -3,7 +3,7 @@
 .journeys-head h1 { font-weight: 400; font-size: clamp(34px, 5vw, 54px); margin: 0 0 6px; font-style: italic; }
 .journeys-head p { max-width: 62ch; font-size: 18px; }
 .granary { display: flex; gap: 16px; align-items: center; margin-top: 14px; }
-.journey-grid { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.journey-grid { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 16px; }
 .journey { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; border-top: 3px solid var(--accent); }
 .journey.active { box-shadow: 0 0 0 1.5px var(--invite) inset; }
 .journey-top { display: flex; gap: 12px; }
@@ -18,3 +18,5 @@
 .journey-stops code { display: block; font-size: 11.5px; color: var(--ink-3); }
 .journey-go { align-self: flex-start; border-color: var(--invite); color: var(--invite); margin-top: auto; }
 .benediction { margin: auto 0 0; font-style: italic; color: var(--gold); }
+.journeys-guide { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.guide-bubble { padding: 10px 14px; max-width: 52ch; border-radius: var(--r3) var(--r3) var(--r3) var(--r1); font-size: 16px; }

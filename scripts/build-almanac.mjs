@@ -33,6 +33,7 @@ async function main() {
   }
   const sha = git('rev-parse', 'HEAD').trim()
   const committed = git('log', '-1', '--format=%cI').trim()
+  const subject = git('log', '-1', '--format=%s').trim()
 
   // mode, type, blob sha, size, path
   const rows = git('ls-tree', '-r', '-l', '--full-tree', 'HEAD').split('\n').filter(Boolean)
@@ -90,7 +91,7 @@ async function main() {
     entries.push(e)
   }
 
-  const out = { format: 'grain-atlas-almanac-v1', repo: REPO, branch: BRANCH, sha, committed, generated: new Date().toISOString(), entries }
+  const out = { format: 'grain-atlas-almanac-v1', repo: REPO, branch: BRANCH, sha, committed, subject, generated: new Date().toISOString(), entries }
   await mkdir('public/data', { recursive: true })
   await writeFile('public/data/almanac.json', JSON.stringify(out))
   console.log(`almanac: ${entries.length} entries, ${stamped} stamped, sha ${sha.slice(0, 10)}`)

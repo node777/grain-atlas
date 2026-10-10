@@ -1,5 +1,6 @@
 import { useStore } from '@/core/store'
-import { settings, DEFAULT_REPO, type Settings } from '@/core/settings'
+import { settings, type Settings } from '@/core/settings'
+import { VersionsPanel } from './Versions'
 import { rate } from '@/github/client'
 import { loadRepo } from '@/grain/repo'
 import { CITIES, nearestCity } from '@/astro/cities'
@@ -96,11 +97,7 @@ export function SettingsDrawer({ onClose }: { onClose: () => void }) {
 
         <section style={{ display: 'grid', gap: 10 }}>
           <h3 style={{ margin: 0, fontWeight: 400 }}>Which grain</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <label className="field">Owner<input value={s.owner} onChange={(e) => set({ owner: e.target.value.trim() })} /></label>
-            <label className="field">Repository<input value={s.repo} onChange={(e) => set({ repo: e.target.value.trim() })} /></label>
-          </div>
-          <label className="field">Branch<input value={s.branch} onChange={(e) => set({ branch: e.target.value.trim() })} /></label>
+          <VersionsPanel />
           <label className="field">GitHub token (optional, stays in this browser)
             <input type="password" value={s.token} placeholder="raises the hourly limit from 60 to 5,000" onChange={(e) => set({ token: e.target.value })} />
           </label>
@@ -108,10 +105,7 @@ export function SettingsDrawer({ onClose }: { onClose: () => void }) {
             API calls left this hour: {r.remaining} of {r.limit}
             {r.reset ? `, renewing ${new Date(r.reset).toLocaleTimeString()}` : ''}. {r.lastError ?? ''}
           </p>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="chip" onClick={() => loadRepo()}>Read the tree again</button>
-            <button className="chip" onClick={() => { set({ ...DEFAULT_REPO }); loadRepo() }}>Back to grain-ww/grain</button>
-          </div>
+          <button className="chip" onClick={() => loadRepo()}>Read the tree again</button>
         </section>
       </div>
     </div>
