@@ -523,9 +523,9 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
   const hard = new Grid(64)
   const townCaps = capsules.slice()
   townCaps.forEach((c, i) => hard.add(i, Math.min(c.ax, c.bx) - c.r, Math.min(c.ay, c.by) - c.r, Math.max(c.ax, c.bx) + c.r, Math.max(c.ay, c.by) + c.r))
-  const clearAt = (x: number, y: number) => {
-    let best = CELL * 3
-    hard.each(x - CELL * 3, y - CELL * 3, x + CELL * 3, y + CELL * 3, (id) => {
+  const clearAt = (x: number, y: number, reach = CELL * 3) => {
+    let best = reach
+    hard.each(x - reach, y - reach, x + reach, y + reach, (id) => {
       const c = townCaps[id]
       const dx = c.bx - c.ax, dy = c.by - c.ay, l2 = dx * dx + dy * dy
       const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - c.ax) * dx + (y - c.ay) * dy) / l2)) : 0
@@ -536,25 +536,32 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
 
   /** A watercourse from a to b: it heads for b, but runs downhill where it can, swings round
    *  towns, carries its momentum and wanders in long irregular bends. */
-  const trace = (ax: number, ay: number, bx: number, by: number, key: string): number[] => {
+  const trace = (ax: number, ay: number, bx: number, by: number, key: string, calm = 0): number[] => {
     const step = CELL * 1.1, hh = CELL * 2
+    const direct = Math.hypot(bx - ax, by - ay)
+    const wander = (pts: number[]) => {
+      let L = 0
+      for (let i = 2; i < pts.length; i += 2) L += Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1])
+      return L / Math.max(direct, CELL)
+    }
+    const again = (pts: number[]) => (calm < 2 && wander(pts) > 1.7 ? trace(ax, ay, bx, by, key + '~', calm + 1) : pts)
     const out = [ax, ay]
     let x = ax, y = ay, hx = 0, hy = 0
     const maxSteps = Math.ceil((Math.hypot(bx - ax, by - ay) / step) * 2.5) + 12
     const ph = hash(key) * 97
     for (let k = 0; k < maxSteps; k++) {
       const dx = bx - x, dy = by - y, d = Math.hypot(dx, dy)
-      if (d < step * 1.3) { out.push(bx, by); return smooth(out) }
+      if (d < step * 1.3) { out.push(bx, by); return again(smooth(out)) }
       let vx = dx / d, vy = dy / d
       const pull = Math.min(1, d / (CELL * 10))
       const gx = E(x + hh, y) - E(x - hh, y), gy = E(x, y + hh) - E(x, y - hh), gl = Math.hypot(gx, gy)
       if (gl > 1e-4) { vx -= (gx / gl) * 0.7 * pull; vy -= (gy / gl) * 0.7 * pull }
-      if (k >= 3 && d > step * 4 && clearAt(x + vx * step * 1.5, y + vy * step * 1.5) < CELL * 0.8) {
+      if (calm < 2 && k >= 3 && d > step * 4 && clearAt(x + vx * step * 1.5, y + vy * step * 1.5) < CELL * 0.8) {
         const cx = clearAt(x + hh, y) - clearAt(x - hh, y), cy = clearAt(x, y + hh) - clearAt(x, y - hh), cl = Math.hypot(cx, cy) || 1
         vx += (cx / cl) * 1.3; vy += (cy / cl) * 1.3
       }
       vx += hx * 0.8; vy += hy * 0.8
-      const m = (vnoise(k * 0.18 + ph, ph, 1, 31) - 0.5) * 1.6 * pull
+      const m = (vnoise(k * 0.18 + ph, ph, 1, 31) - 0.5) * (1.6 - calm * 0.6) * pull
       const c = Math.cos(m), sn = Math.sin(m)
       let nx = vx * c - vy * sn, ny = vx * sn + vy * c
       const nl = Math.hypot(nx, ny) || 1
@@ -564,7 +571,7 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
       out.push(x, y)
     }
     out.push(bx, by)
-    return smooth(out)
+    return again(smooth(out))
   }
 
   /** Where a river rises: the highest open ground behind (upstream of) a point. */
@@ -584,45 +591,53 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
   const lakes: Lake[] = []
   /** Where water pools: the lowest open ground ahead, with room for a lake of radius r. */
   const poolOf = (x: number, y: number, ux: number, uy: number, r: number, key: string): { x: number; y: number; r: number } => {
-    let best = { x: x + ux * r * 1.4, y: y + uy * r * 1.4, r: r * 0.6 }, be = Infinity
+    let best = { x: x + ux * r * 2, y: y + uy * r * 2, r: r * 0.5 }, be = Infinity
     const ahead = Math.atan2(uy, ux)
     for (let i = 0; i < 24; i++) {
-      const a = ahead + (hash(`${key}:p${i}`) - 0.5) * 2.0, dist = r * (1.1 + hash(`${key}:q${i}`) * 2.2)
+      const a = ahead + (hash(`${key}:p${i}`) - 0.5) * 2.2, dist = r * (1.8 + hash(`${key}:q${i}`) * 2.4)
       const px = x + Math.cos(a) * dist, py = y + Math.sin(a) * dist
       const g = elevAt(terrain, px, py)
       if (!g) continue
-      const room = Math.min(clearAt(px, py), g.clear + CELL * 2)
-      if (room < r * 0.55) continue
-      const score = g.e - Math.min(room, r) / r * 0.3
-      if (score < be) { be = score; best = { x: px, y: py, r: Math.min(r, room * 0.95) } }
+      const room = Math.min(clearAt(px, py, r * 2.5), g.clear)
+      // the shore reaches about twice the radius at its longest lobe: keep all of it on land
+      if (room < r) continue
+      const score = g.e - Math.min(room, 2 * r) / r * 0.3
+      if (score < be) { be = score; best = { x: px, y: py, r: Math.min(r, room * 0.5) } }
     }
     return best
   }
 
-  /** An organic shoreline: a lobed, crinkled ring, longer along the inflow, with a few inlets
-   *  bitten into it, and an island or two when it is large. */
-  const makeLake = (cx: number, cy: number, r: number, ang: number, key: string, name: string): Lake => {
-    const N = 56, ring: Array<[number, number]> = []
-    const f1 = hash(key + ':1') * 6.28, f2 = hash(key + ':2') * 6.28, f3 = hash(key + ':3') * 6.28
-    const inlets = Array.from({ length: 1 + Math.floor(hash(key + ':n') * 3) }, (_, i) => [hash(`${key}:i${i}`) * 6.28, 0.25 + hash(`${key}:d${i}`) * 0.25])
+  /** An organic shoreline: an irregular lobed ring (noise around the angle, two or three broad
+   *  lobes), set crosswise to the water coming in so a river meets its long side, with inlets
+   *  bitten into it and an island or two when it is large. */
+  const makeLake = (cx: number, cy: number, r: number, inflow: number, key: string, name: string): Lake => {
+    const N = 64, ring: Array<[number, number]> = []
+    const ph = hash(key + ':ph') * 40
+    const lobes = 2 + Math.floor(hash(key + ':l') * 2)
+    const f1 = hash(key + ':1') * 6.28, f2 = hash(key + ':2') * 6.28
+    const inlets = Array.from({ length: 2 + Math.floor(hash(key + ':n') * 3) }, (_, i) => [hash(`${key}:i${i}`) * 6.28, 0.18 + hash(`${key}:d${i}`) * 0.22])
+    const ang = inflow + Math.PI / 2 + (hash(key + ':a') - 0.5) * 0.8
     const ca = Math.cos(ang), sa = Math.sin(ang)
     for (let i = 0; i < N; i++) {
       const t = (i / N) * Math.PI * 2
-      let rr = r * (1 + 0.16 * Math.sin(2 * t + f1) + 0.1 * Math.sin(3 * t + f2) + 0.06 * Math.sin(5 * t + f3))
+      const nz = vnoise(Math.cos(t) * 2.2 + ph, Math.sin(t) * 2.2 + ph, 1, 41) - 0.5
+      let rr = r * (1 + 0.22 * Math.sin(lobes * t + f1) + 0.1 * Math.sin((lobes + 2) * t + f2) + 0.45 * nz)
       for (const [a, dep] of inlets) {
         let dt = Math.abs(t - a) % (Math.PI * 2)
         if (dt > Math.PI) dt = Math.PI * 2 - dt
-        rr *= 1 - dep * Math.exp(-((dt / 0.16) ** 2))
+        rr *= 1 - dep * Math.exp(-((dt / 0.13) ** 2))
       }
-      const lx = Math.cos(t) * rr * 1.22, ly = Math.sin(t) * rr * 0.8
+      // small waters are rounder; big ones stretch out
+      const st = Math.min(1, r / (CELL * 4))
+      const lx = Math.cos(t) * rr * (1.1 + 0.25 * st), ly = Math.sin(t) * rr * (0.9 - 0.18 * st)
       ring.push([cx + lx * ca - ly * sa, cy + lx * sa + ly * ca])
     }
-    const pts = roughen(ring, key, 2, 0.1)
+    const pts = roughen(ring, key, 2, 0.12)
     const islands: Float32Array[] = []
-    const count = r > CELL * 5 ? 2 : r > CELL * 3 ? 1 : 0
+    const count = r > CELL * 4.5 ? 2 : r > CELL * 2.6 ? 1 : 0
     for (let k = 0; k < count; k++) {
-      const a = hash(`${key}:ia${k}`) * 6.28, off = r * (0.22 + 0.2 * hash(`${key}:io${k}`)), ir = r * (0.1 + 0.07 * hash(`${key}:ir${k}`))
-      const ix = cx + Math.cos(a) * off, iy = cy + Math.sin(a) * off
+      const a = hash(`${key}:ia${k}`) * 6.28, off = r * (0.15 + 0.25 * hash(`${key}:io${k}`)), ir = r * (0.1 + 0.07 * hash(`${key}:ir${k}`))
+      const ix = cx + (Math.cos(a) * off * 1.2) * ca - (Math.sin(a) * off * 0.6) * sa, iy = cy + (Math.cos(a) * off * 1.2) * sa + (Math.sin(a) * off * 0.6) * ca
       const isl: Array<[number, number]> = []
       for (let q = 0; q < 9; q++) {
         const t = (q / 9) * Math.PI * 2, rr = ir * (0.7 + hash(`${key}:${k}:${q}`) * 0.6)
@@ -630,7 +645,7 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
       }
       islands.push(roughen(isl, `${key}:isl${k}`, 2, 0.16))
     }
-    const lake = { pts, islands, box: boxOf(pts), x: cx, y: cy, r, name }
+    const lake = { pts, islands, box: boxOf(pts), x: cx, y: cy, r: r * 1.15, name }
     lakes.push(lake)
     return lake
   }
@@ -641,8 +656,8 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
     return [qx + (lake.x - qx) * 0.12, qy + (lake.y - qy) * 0.12]
   }
 
-  const widthOf = (cum: number) => CELL * Math.min(1.3, 0.09 + 0.07 * Math.sqrt(Math.max(0, cum)))
-  const course: Array<{ pts: number[]; cum: number[]; name: string; main: boolean; li: number }> = []
+  const widthOf = (cum: number) => CELL * Math.min(1.15, 0.09 + 0.065 * Math.sqrt(Math.max(0, cum)))
+  const course: Array<{ pts: number[]; cum: number[]; name: string; main: boolean; li: number; basin?: Plot }> = []
   const add = (c: { pts: number[]; cum: number[] }, seq: number[], c0: number, c1: number, skipFirst: boolean) => {
     const n = seq.length / 2
     for (let i = skipFirst ? 1 : 0; i < n; i++) {
@@ -655,12 +670,13 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
     const ex = c.pts[c.pts.length - 2], ey = c.pts[c.pts.length - 1], cumEnd = c.cum[c.cum.length - 1]
     const [qx, qy] = nearestOn(coastPts[li], ex, ey)
     const land = world.regions[li]
-    if (Math.hypot(qx - ex, qy - ey) < land.r * 0.9) {
+    // the sea near enough: run down to it; otherwise the water pools inland
+    if (Math.hypot(qx - ex, qy - ey) < land.r * 0.4) {
       const ox = qx - land.x, oy = qy - land.y, ol = Math.hypot(ox, oy) || 1
       add(c, trace(ex, ey, qx + (ox / ol) * CELL * 0.6, qy + (oy / ol) * CELL * 0.6, key), cumEnd, cumEnd, true)
       return
     }
-    const r = CELL * (1.8 + Math.sqrt(cumEnd) * 0.18)
+    const r = CELL * (2.2 + Math.sqrt(cumEnd) * 0.2)
     const site = poolOf(ex, ey, ux, uy, r, key)
     const lake = makeLake(site.x, site.y, Math.max(CELL * 1.4, site.r), Math.atan2(site.y - ey, site.x - ex), key + ':lake', lakeName)
     const [sx, sy] = shoreOf(lake, ex, ey)
@@ -696,13 +712,13 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
     const [ux, uy] = flow.get(last)!
     const title = cap(B.name === 'date' ? B.path.split('/').slice(-2, -1)[0] ?? B.name : B.name)
     mouth(c, li, ux, uy, B.path + ':mouth', `L. ${title}`)
-    course.push({ ...c, name: `R. ${title}`, main: true, li })
+    course.push({ ...c, name: `R. ${title}`, main: true, li, basin: B })
   }
   const mains = course.slice()
 
   /** Join a tributary into the nearest main river of its land, if one is near; returns false
    *  when there is none to join. The main river widens below the junction. */
-  const join = (c: { pts: number[]; cum: number[] }, li: number, files: number, key: string, reach: number): boolean => {
+  const join = (c: { pts: number[]; cum: number[] }, li: number, files: number, key: string, reach: number, grow = 0): boolean => {
     const ex = c.pts[c.pts.length - 2], ey = c.pts[c.pts.length - 1]
     let bm = -1, bi = 0, bd = reach
     mains.forEach((m, mi) => {
@@ -715,7 +731,7 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
     if (bm < 0) return false
     const m = mains[bm]
     const cumEnd = c.cum[c.cum.length - 1]
-    add(c, trace(ex, ey, m.pts[bi * 2], m.pts[bi * 2 + 1], key), cumEnd, cumEnd, true)
+    add(c, trace(ex, ey, m.pts[bi * 2], m.pts[bi * 2 + 1], key), cumEnd, cumEnd + grow, true)
     for (let i = bi; i < m.cum.length; i++) m.cum[i] += files
     return true
   }
@@ -741,7 +757,7 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
 
   // the deep sub-folders of a main river's room send down becks from their high ground
   for (const m of mains) {
-    const B = basins.find((b) => `R. ${cap(b.plot.name === 'date' ? b.plot.path.split('/').slice(-2, -1)[0] ?? b.plot.name : b.plot.name)}` === m.name)?.plot
+    const B = m.basin
     if (!B) continue
     const top = B.path.split('/')[0]
     const room = plots.find((q) => q.path === top)
@@ -759,13 +775,62 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
         if (g.e > be) { be = g.e; best = [px, py] }
       }
       if (!best) continue
-      const c = { pts: [best[0], best[1]] as number[], cum: [0] as number[] }
-      if (join(c, m.li, Math.min(q.files, 60), q.path + ':beck', B.r * 2.4)) course.push({ ...c, name: `${cap(q.name)} Beck`, main: false, li: m.li })
+      const files = Math.min(q.files, 120)
+      // a big folder's beck rises from a tarn in the high ground
+      let start = best
+      const tr = CELL * (1.1 + Math.sqrt(files) * 0.09)
+      if (q.files >= 40 && clearAt(best[0], best[1], tr * 2) > tr * 1.4 && (elevAt(terrain, best[0], best[1])?.clear ?? 0) > tr * 1.2) {
+        const lake = makeLake(best[0], best[1], tr, hash(q.path + ':ta') * 6.28, q.path + ':tarn', `${cap(q.name)} Tarn`)
+        const [jx, jy] = [mx(m.basin!), my(m.basin!)]
+        const [sx, sy] = nearestOn(lake.pts, jx, jy)
+        start = [sx, sy]
+      }
+      const c = { pts: [start[0], start[1]] as number[], cum: [0] as number[] }
+      if (join(c, m.li, files, q.path + ':beck', B.r * 2.4, files)) course.push({ ...c, name: `${cap(q.name)} Beck`, main: false, li: m.li })
+      else if (start !== best) lakes.pop()
     }
   }
 
+  /** Even spacing along a course (with the file count carried along), so it is cheap to draw
+   *  and to keep relief off. */
+  const resample = (pts: number[], cum: number[], gap: number): [number[], number[]] => {
+    const op = [pts[0], pts[1]], oc = [cum[0]]
+    let carry = 0
+    for (let i = 1; i < pts.length / 2; i++) {
+      const ax = pts[i * 2 - 2], ay = pts[i * 2 - 1], bx = pts[i * 2], by = pts[i * 2 + 1]
+      const L = Math.hypot(bx - ax, by - ay)
+      let t = gap - carry
+      while (t <= L) {
+        const u = t / L
+        op.push(ax + (bx - ax) * u, ay + (by - ay) * u)
+        oc.push(cum[i - 1] + (cum[i] - cum[i - 1]) * u)
+        t += gap
+      }
+      carry = L - (t - gap)
+    }
+    op.push(pts[pts.length - 2], pts[pts.length - 1]); oc.push(cum[cum.length - 1])
+    return [op, oc]
+  }
+  /** One gentle corner-cut over a whole course (file counts carried), to round off the joins
+   *  between its traced stretches and its towns. */
+  const soften = (pts: number[], cum: number[]): [number[], number[]] => {
+    const n = pts.length / 2
+    if (n < 3) return [pts, cum]
+    const op = [pts[0], pts[1]], oc = [cum[0]]
+    for (let i = 0; i < n - 1; i++) {
+      const ax = pts[i * 2], ay = pts[i * 2 + 1], bx = pts[i * 2 + 2], by = pts[i * 2 + 3]
+      op.push(ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25, ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75)
+      oc.push(cum[i] * 0.75 + cum[i + 1] * 0.25, cum[i] * 0.25 + cum[i + 1] * 0.75)
+    }
+    op.push(pts[pts.length - 2], pts[pts.length - 1]); oc.push(cum[n - 1])
+    return [op, oc]
+  }
   const rivers: River[] = course.map((c) => {
-    const P = Float32Array.from(c.pts), cum = Float32Array.from(c.cum)
+    const [sp, sc] = resample(c.pts, c.cum, CELL * 0.9)
+    const [s1, c1] = soften(sp, sc)
+    const [s2, c2] = soften(s1, c1)
+    const [rp, rc] = resample(s2, c2, CELL * 0.55)
+    const P = Float32Array.from(rp), cum = Float32Array.from(rc)
     const W = new Float32Array(cum.length)
     for (let i = 0; i < cum.length; i++) W[i] = widthOf(cum[i])
     for (let i = 0; i < W.length - 1; i++) capsules.push({ ax: P[i * 2], ay: P[i * 2 + 1], bx: P[i * 2 + 2], by: P[i * 2 + 3], r: W[i] * 0.5 + CELL * 0.5 })

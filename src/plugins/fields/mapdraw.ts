@@ -18,7 +18,7 @@ import {
   K, OX, OY, W, H, board, fogPattern, beginFrame, drawSeeds, drawPulse, drawRoad, regionTitle, type Geo, type Scene,
 } from './draw'
 import { textWidth, fontAt } from './labels'
-import { type Atlas, CELL, coastReach, zoneClear } from './atlas'
+import { type Atlas, CELL, coastReach, zoneClear, elevAt, ih, vnoise } from './atlas'
 import { Kind, type Ink, drawGlyph, kindTint, mountain, hill, tree, tuft, KIND_INFO, KIND_COUNT } from './glyphs'
 import { TileCache, TILE, type TileFrame } from './tiles'
 import { Sprites, stepOf } from './sprites'
@@ -41,23 +41,6 @@ export function inkFrom(C: Record<string, string>, stone: boolean): Ink {
     elder: C['--elder'], brass: C['--brass'], lead: C['--ink-2'],
     stone: C['--ink-3'], dim: C['--ink-3'], shade: stone ? C['--ink'] : C['--page'], night: !stone,
   }
-}
-
-/** A cheap integer hash to 0..1 for lattice cells. */
-function ih(i: number, j: number, o: number): number {
-  let h = Math.imul(i | 0, 374761393) ^ Math.imul(j | 0, 668265263) ^ Math.imul(o | 0, 1442695041)
-  h = Math.imul(h ^ (h >>> 13), 1274126177)
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
-}
-
-/** Smooth value noise, 0..1, on a lattice of the given size. */
-function vnoise(x: number, y: number, size: number, o: number): number {
-  const fx = x / size, fy = y / size
-  const i = Math.floor(fx), j = Math.floor(fy)
-  const u = fx - i, v = fy - j
-  const su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v)
-  const a = ih(i, j, o), b = ih(i + 1, j, o), c = ih(i, j + 1, o), d = ih(i + 1, j + 1, o)
-  return a + (b - a) * su + (c - a) * sv + (a - b - c + d) * su * sv
 }
 
 function pathOf(pts: Float32Array): Path2D {
@@ -91,6 +74,12 @@ export class MapRenderer {
   /** each coast cut into short open runs, so a tile strokes only the shore near it */
   private shore: Array<Array<{ p: Path2D; pts: Float32Array; box: [number, number, number, number] }>> = []
   private sprites = new Sprites()
+  private lakePaths = new Map<object, Path2D>()
+  private lakePath(l: { pts: Float32Array }): Path2D {
+    let p = this.lakePaths.get(l)
+    if (!p) { p = pathOf(l.pts); this.lakePaths.set(l, p) }
+    return p
+  }
   private I: Ink = inkFrom({}, false)
   private C: Record<string, string> = {}
   private relief = true
@@ -127,64 +116,15 @@ export class MapRenderer {
 
   // ------------------------------------------------------------ relief
 
-  /** How high a folder's open ground stands: folders beneath raise it, and so does sheer size. */
-  private base(P: Plot): number {
-    const height = this.atlas!.height.get(P) ?? 0
-    return height * 0.75 + Math.max(0, Math.log10(Math.max(1, P.files)) - 1.3) * 0.55 + (P.depth === 0 ? 0.1 : 0)
-  }
-
-  private room(P: Plot, rooms: Plot[]): Plot {
-    const top = P.path.includes('/') ? P.path.slice(0, P.path.indexOf('/')) : P.path
-    return rooms.find((r) => r.path === top) ?? P
-  }
-
   /** What the ground is like at a world point: elevation and clear room around, or null where
-   *  nothing may be drawn (sea, surf, settlements, rivers, roads). */
+   *  nothing may be drawn (sea, surf, settlements, rivers, lakes, roads). */
   private ground(x: number, y: number, reach: number): { e: number; clear: number } | null {
-    const at = this.atlas!, world = this.world!
-    for (let li = 0; li < world.regions.length; li++) {
-      const b = at.landBox[li]
-      if (x < b[0] || x > b[2] || y < b[1] || y > b[3]) continue
-      const land = world.regions[li]
-      const d = Math.hypot(x - land.x, y - land.y)
-      const coast = coastReach(land, x, y) - 40 - d
-      if (coast < 0) continue
-      let P: Plot | undefined
-      for (const room of land.rooms) if (Math.hypot(x - mx(room), y - my(room)) < room.r) { P = room; break }
-      let clear = coast, e = 0
-      if (!P) {
-        // open country: foothills spill a little way out from a high room, woods beyond
-        for (const room of land.rooms) {
-          const out = Math.hypot(x - mx(room), y - my(room)) - room.r
-          clear = Math.min(clear, out)
-          const t = 1 - Math.min(1, Math.max(0, out / (room.r * 0.35 + 60)))
-          e = Math.max(e, this.base(room) * 0.4 * t * t * (3 - 2 * t))
-        }
-      } else {
-        for (;;) {
-          let next: Plot | undefined
-          for (const c of P.children) if (Math.hypot(x - mx(c), y - my(c)) < c.r) { next = c; break }
-          if (!next) break
-          P = next
-        }
-        // the rim of a folder only halves its height, so no circle shows where it ends
-        const rim = P.r - Math.hypot(x - mx(P), y - my(P))
-        let inner = Infinity
-        for (const c of P.children) inner = Math.min(inner, Math.hypot(x - mx(c), y - my(c)) - c.r)
-        clear = Math.min(clear, inner)
-        const ramp = CELL * 2.5 + P.r * 0.1
-        const t = Math.max(0, Math.min(1, inner / ramp)), u = Math.max(0, Math.min(1, rim / (ramp * 2)))
-        e = this.base(P) * t * t * (3 - 2 * t) * (0.5 + 0.5 * u * u * (3 - 2 * u))
-        if (P.depth > 0) e = Math.max(e, this.base(this.room(P, land.rooms)) * 0.5 * (1 - u))
-      }
-      // ranges and valleys: the height swells and falls across the land
-      const sw = vnoise(x, y, 340, 9) * 0.7 + vnoise(x, y, 110, 10) * 0.3
-      e *= 0.25 + 1.5 * sw * sw
-      const z = zoneClear(at, x, y, Math.min(240, reach))
-      if (z < 0) return null
-      return { e, clear: Math.min(clear, z) }
-    }
-    return null
+    const at = this.atlas!
+    const g = elevAt(at, x, y)
+    if (!g) return null
+    const z = zoneClear(at, x, y, Math.min(240, reach))
+    if (z < 0) return null
+    return { e: g.e, clear: Math.min(g.clear, z) }
   }
 
   // ------------------------------------------------------------ tiles
@@ -303,34 +243,94 @@ export class MapRenderer {
     g.setLineDash([])
     g.globalAlpha = 1
 
-    // rivers: double ink banks with water between once they are wide enough, else one ink line
-    for (const rv of at.rivers) {
-      if (!hit(rv.box, 3 * wpx)) continue
-      const P = rv.pts, Wd = rv.w, n = P.length / 2
+    // water. Banks first, for every river and lake in reach, then the water over them all, so
+    // where a tributary meets its river the banks open into one another. Each river is stroked
+    // as a few continuous runs of near-equal width, so its joints never show.
+    const rv = at.rivers.filter((r) => hit(r.box, 3 * wpx))
+    const lk = at.lakes.filter((l) => hit(l.box, 12 * wpx))
+    if (rv.length || lk.length) {
+      const bank = 1.1 * wpx
+      const near = (P: Float32Array, i: number) => {
+        const x = P[i * 2], y = P[i * 2 + 1]
+        return x > x0 - 3 * CELL && x < x1 + 3 * CELL && y > y0 - 3 * CELL && y < y1 + 3 * CELL
+      }
+      /** Runs of a river: [start, end, width] with width within ~6% (or a pixel) along each. */
+      const runs = (r: { pts: Float32Array; w: Float32Array }) => {
+        const out: Array<[number, number, number]> = []
+        const n = r.pts.length / 2
+        let i = 0
+        while (i < n - 1) {
+          while (i < n - 1 && !near(r.pts, i) && !near(r.pts, i + 1)) i++
+          if (i >= n - 1) break
+          const w0 = r.w[i]
+          let j = i + 1
+          while (j < n - 1 && (near(r.pts, j) || near(r.pts, j + 1)) && Math.abs(r.w[j] - w0) * px < Math.max(1, w0 * px * 0.06)) j++
+          out.push([i, j, (w0 + r.w[j]) / 2])
+          i = j
+        }
+        return out
+      }
+      const strokeRun = (P: Float32Array, a: number, b: number) => {
+        g.beginPath(); g.moveTo(P[a * 2], P[a * 2 + 1])
+        for (let i = a + 1; i <= b; i++) g.lineTo(P[i * 2], P[i * 2 + 1])
+        g.stroke()
+      }
+      const all = rv.map((r) => ({ r, runs: runs(r) }))
       g.strokeStyle = I.ink
-      for (let i = 0; i < n - 1; i++) {
-        const wv = Wd[i] * px
-        g.globalAlpha = wv < 1.6 ? 0.75 : 0.9
-        g.lineWidth = wv < 1.6 ? Math.max(0.7, wv) * wpx : Wd[i] + 2.2 * wpx
-        g.beginPath(); g.moveTo(P[i * 2], P[i * 2 + 1]); g.lineTo(P[i * 2 + 2], P[i * 2 + 3]); g.stroke()
+      for (const { r, runs: rs } of all) for (const [a, b, w] of rs) {
+        const wv = w * px
+        // a stream too narrow to show water is a single fine ink line, tapering to its spring
+        g.globalAlpha = wv < 1.6 ? 0.55 + 0.3 * Math.min(1, wv / 1.6) : 0.9
+        g.lineWidth = wv < 1.6 ? Math.max(0.55, wv) * wpx : w + bank * 2
+        strokeRun(r.pts, a, b)
       }
+      g.globalAlpha = 0.9
+      g.lineWidth = bank * 2
+      for (const l of lk) g.stroke(this.lakePath(l))
       g.globalAlpha = 1
+      g.fillStyle = I.sea
       g.strokeStyle = I.sea
-      for (let i = 0; i < n - 1; i++) {
-        if (Wd[i] * px < 1.6) continue
-        g.lineWidth = Wd[i]
-        g.beginPath(); g.moveTo(P[i * 2], P[i * 2 + 1]); g.lineTo(P[i * 2 + 2], P[i * 2 + 3]); g.stroke()
+      for (const l of lk) g.fill(this.lakePath(l))
+      for (const { r, runs: rs } of all) for (const [a, b, w] of rs) {
+        if (w * px < 1.6) continue
+        g.lineWidth = w
+        strokeRun(r.pts, a, b)
       }
-      const lk = rv.lake
-      if (lk) {
-        g.beginPath(); g.ellipse(lk.x, lk.y, lk.rx, lk.ry, lk.a, 0, Math.PI * 2)
-        g.fillStyle = I.sea; g.fill()
-        g.strokeStyle = I.ink; g.lineWidth = 1.1 * wpx; g.stroke()
-        if (lk.ry * px > 9) {
-          g.beginPath(); g.ellipse(lk.x, lk.y, lk.rx - 3 * wpx, lk.ry - 3 * wpx, lk.a, 0, Math.PI * 2)
-          g.globalAlpha = 0.35; g.lineWidth = 0.8 * wpx; g.stroke(); g.globalAlpha = 1
+      // a wide river is water-lined like the sea: a fine line just inside each bank
+      for (const { r, runs: rs } of all) for (const [a, b, w] of rs) {
+        if (w * px < 7) continue
+        g.strokeStyle = I.ink; g.globalAlpha = 0.3; g.lineWidth = w - 2.4 * wpx
+        strokeRun(r.pts, a, b)
+        g.strokeStyle = I.sea; g.globalAlpha = 1; g.lineWidth = w - 3.8 * wpx
+        strokeRun(r.pts, a, b)
+      }
+      // a lake's water-lining: fine ripples following the shore inward; then its islands
+      g.strokeStyle = I.ink
+      g.lineWidth = 0.7 * wpx
+      for (const l of lk) {
+        const rings = Math.min(4, Math.floor((l.r * px) / 7))
+        for (let q = 1; q <= rings; q++) {
+          const d = q * 2.8 * wpx
+          g.globalAlpha = 0.42 * (1 - (q - 1) / (rings + 1))
+          g.beginPath()
+          const P = l.pts
+          for (let i = 0; i < P.length; i += 2) {
+            const dx = P[i] - l.x, dy = P[i + 1] - l.y, dl = Math.hypot(dx, dy) || 1
+            const f = Math.max(0, 1 - d / dl)
+            if (i) g.lineTo(l.x + dx * f, l.y + dy * f); else g.moveTo(l.x + dx * f, l.y + dy * f)
+          }
+          g.closePath()
+          g.stroke()
+        }
+        g.globalAlpha = 1
+        for (const isl of l.islands) {
+          const ip = pathOf(isl)
+          g.fillStyle = I.land; g.fill(ip)
+          g.lineWidth = 1 * wpx; g.stroke(ip)
+          g.lineWidth = 0.7 * wpx
         }
       }
+      g.globalAlpha = 1
     }
 
     // from here on in css pixels, tile-local
@@ -641,6 +641,51 @@ export class MapRenderer {
     ctx.restore()
   }
 
+  private waterNames(ctx: CanvasRenderingContext2D, at: Atlas, halo: string, I: Ink) {
+    const face = 'italic {s} Vollkorn, Georgia, serif'
+    for (const l of at.lakes) {
+      const r = l.r * K
+      if (r < 26) continue
+      const x = l.x * K + OX, y = l.y * K + OY
+      if (x < 0 || x > W || y < 0 || y > H) continue
+      const size = Math.max(10.5, Math.min(18, r * 0.2))
+      const track = size * 0.18
+      let tw = -track
+      for (const ch of l.name) tw += textWidth(ctx, face, ch, size) + track
+      if (tw > r * 2.2 || !board.place(x - tw / 2 - 2, y - size * 0.8, x + tw / 2 + 2, y + size * 0.3)) continue
+      ctx.save()
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'alphabetic'
+      ctx.strokeStyle = I.sea; ctx.lineWidth = 3; ctx.globalAlpha = 0.8
+      spaced(ctx, l.name, x, y + size * 0.3, fontAt(face, size), track, true)
+      ctx.fillStyle = I.ink; ctx.globalAlpha = 0.85
+      spaced(ctx, l.name, x, y + size * 0.3, fontAt(face, size), track)
+      ctx.restore()
+    }
+    // main rivers first, and the wider each river the larger its name
+    const list = at.rivers.filter((r) => r.name && (r.main || CELL * K > 2.2)).sort((a, b) => Number(b.main) - Number(a.main))
+    for (const r of list) {
+      const xs: number[] = [], ys: number[] = []
+      let wsum = 0, wn = 0
+      // the river's course on screen, thinned to a point every few pixels
+      let lx = -1e9, ly = -1e9
+      for (let i = 0; i < r.pts.length / 2; i++) {
+        const x = r.pts[i * 2] * K + OX, y = r.pts[i * 2 + 1] * K + OY
+        if (x < -40 || x > W + 40 || y < -40 || y > H + 40) {
+          if (xs.length > 1) break
+          xs.length = 0; ys.length = 0
+          continue
+        }
+        if (Math.hypot(x - lx, y - ly) < 5) continue
+        xs.push(x); ys.push(y); lx = x; ly = y
+        wsum += r.w[i] * K; wn++
+      }
+      const wpx = wn ? wsum / wn : 1
+      const size = r.main ? Math.max(11, Math.min(17, 10 + wpx * 0.6)) : Math.max(9.5, Math.min(13, 9 + wpx * 0.5))
+      alongCurve(ctx, xs, ys, r.name, face, size, wpx / 2 + 3, I.ink, halo)
+    }
+  }
+
   private names(ctx: CanvasRenderingContext2D, world: World, geo: Geo, at: Atlas, sc: Scene, prefs: FieldsPrefs, hoverGlyph: number) {
     const C = sc.C, I = this.I
     for (const li of geo.titleOrder) regionTitle(ctx, world.regions[li], C)
@@ -681,6 +726,8 @@ export class MapRenderer {
         break
       }
     }
+    // rivers named along their course, lakes across their water
+    this.waterNames(ctx, at, halo, I)
     // settlements, biggest first, beside their footprint
     const cellPx = CELL * K
     const towns = at.settlements.filter((st) => {
@@ -754,6 +801,80 @@ export class MapRenderer {
       }
     }
   }
+}
+
+/** Set `text` along a screen-space polyline, a little to one side of it, reading left to right:
+ *  the stretch chosen is the straightest one long enough, nearest the middle of what is on
+ *  screen. Returns false (drawing nothing) when no stretch fits on the label board. */
+function alongCurve(ctx: CanvasRenderingContext2D, xs: number[], ys: number[], text: string, face: string, size: number, lift: number, color: string, halo: string): boolean {
+  const n = xs.length
+  if (n < 2) return false
+  const arc = [0]
+  for (let i = 1; i < n; i++) arc.push(arc[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]))
+  const track = size * 0.12
+  const ws: number[] = []
+  let tw = -track
+  for (const ch of text) { const w = textWidth(ctx, face, ch, size); ws.push(w); tw += w + track }
+  const total = arc[n - 1]
+  if (total < tw * 1.15) return false
+  const at = (d: number): [number, number, number] => {
+    let i = 1
+    while (i < n - 1 && arc[i] < d) i++
+    const u = (d - arc[i - 1]) / Math.max(1e-6, arc[i] - arc[i - 1])
+    return [xs[i - 1] + (xs[i] - xs[i - 1]) * u, ys[i - 1] + (ys[i] - ys[i - 1]) * u, Math.atan2(ys[i] - ys[i - 1], xs[i] - xs[i - 1])]
+  }
+  const starts: number[] = []
+  for (let d = 0; d + tw <= total; d += Math.max(12, tw * 0.25)) starts.push(d)
+  starts.sort((a, b) => Math.abs(a + tw / 2 - total / 2) - Math.abs(b + tw / 2 - total / 2))
+  for (const s0 of starts) {
+    // straight enough: the heading may turn no more than about thirty degrees across the name
+    const a0 = at(s0)[2]
+    let ok = true
+    for (let k = 1; k <= 6 && ok; k++) {
+      let da = at(s0 + (tw * k) / 6)[2] - a0
+      while (da > Math.PI) da -= Math.PI * 2
+      while (da < -Math.PI) da += Math.PI * 2
+      if (Math.abs(da) > 0.55) ok = false
+    }
+    if (!ok) continue
+    const mid = at(s0 + tw / 2)
+    const flip = Math.cos(mid[2]) < 0
+    const glyphs: Array<[number, number, number, string]> = []
+    let acc = 0, fits = true
+    const chars = [...text]
+    for (let c = 0; c < chars.length; c++) {
+      const d = flip ? s0 + tw - acc - ws[c] / 2 : s0 + acc + ws[c] / 2
+      const [px, py, ang0] = at(d)
+      const ang = flip ? ang0 + Math.PI : ang0
+      // the baseline sits just above the river (up being square to the text, toward its tops)
+      const ox = px + Math.sin(ang) * lift, oy = py - Math.cos(ang) * lift
+      const qx = ox + Math.sin(ang) * size * 0.35, qy = oy - Math.cos(ang) * size * 0.35
+      if (qx < 4 || qx > W - 4 || qy < 4 || qy > H - 4) { fits = false; break }
+      glyphs.push([ox, oy, ang, chars[c]])
+      acc += ws[c] + track
+    }
+    if (!fits) continue
+    const boxes = glyphs.map(([gx, gy, ang]) => {
+      const cx = gx + Math.sin(ang) * size * 0.35, cy = gy - Math.cos(ang) * size * 0.35
+      return [cx - size * 0.42, cy - size * 0.42, cx + size * 0.42, cy + size * 0.42]
+    })
+    if (!boxes.every((b) => board.fits(b[0], b[1], b[2], b[3]))) continue
+    for (const b of boxes) board.add(b[0], b[1], b[2], b[3])
+    ctx.save()
+    ctx.font = fontAt(face, size)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    ctx.lineWidth = 3
+    for (const [gx, gy, ang, ch] of glyphs) {
+      ctx.translate(gx, gy); ctx.rotate(ang)
+      ctx.strokeStyle = halo; ctx.globalAlpha = 0.85; ctx.strokeText(ch, 0, 0)
+      ctx.fillStyle = color; ctx.globalAlpha = 1; ctx.fillText(ch, 0, 0)
+      ctx.rotate(-ang); ctx.translate(-gx, -gy)
+    }
+    ctx.restore()
+    return true
+  }
+  return false
 }
 
 /** Letter-spaced text centred on x, set one character at a time (canvas has no tracking). */

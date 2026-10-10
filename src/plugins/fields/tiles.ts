@@ -1,9 +1,10 @@
 // A cache of pre-drawn map tiles, so panning and zooming only copy pixels. Tiles are square
 // pieces of the world drawn at power-of-two scales (levels). The level the zoom asks for is the
-// target; the level on screen is always one complete set: the finest level whose every visible
+// target; the level on screen is always one complete set: the nearest level whose every visible
 // tile is already drawn. While the target's tiles are being made (a few per frame, inside a time
-// budget, nearest the middle first) the previous complete level stays up, scaled; once the
-// target is whole it takes over everywhere at once, with a short crossfade. Levels are never
+// budget, a level at a time from the finest complete one upward, nearest the middle first) the
+// complete level stays up, scaled; each newly whole level takes over everywhere at once, with a
+// short crossfade. Levels are never
 // mixed on screen. A coarse level of the whole world is drawn first and kept for good, so there
 // is always a complete level to show; a ring of tiles just beyond the view is made ahead, so
 // panning rarely uncovers a gap. Least recently used tiles are let go once the cache is full.
@@ -107,38 +108,38 @@ export class TileCache {
       if (!this.base.has(k) && budget()) this.base.set(k, this.make(render, zb, tx, ty))
     }
 
-    // 2. the target level's visible tiles, middle first, then a ring beyond the view
-    const tw = TILE / Math.pow(2, zt)
-    const vis = this.span(zt, vx0, vy0, vx1, vy1)
+    // 2. build toward the target a level at a time: the first incomplete level above the finest
+    //    complete one, so a long zoom sharpens step by step (each step a quarter of the work of
+    //    the next) rather than waiting on a blur. Middle first; then a ring beyond the view.
+    const visOf = (z: number) => this.span(z, vx0, vy0, vx1, vy1)
+    let floor = zb
+    for (let z = zt; z > zb; z--) if (this.complete(z, visOf(z))) { floor = z; break }
+    let zbuild = zt
+    if (floor < zt) for (let z = floor + 1; z <= zt; z++) if (!this.complete(z, visOf(z))) { zbuild = z; break }
+    const tw = TILE / Math.pow(2, zbuild)
+    const vis = visOf(zbuild)
     const mx = (vx0 + vx1) / 2 / tw, my = (vy0 + vy1) / 2 / tw
     const byNear = (a: [number, number], b: [number, number]) => ((a[0] + 0.5 - mx) ** 2 + (a[1] + 0.5 - my) ** 2) - ((b[0] + 0.5 - mx) ** 2 + (b[1] + 0.5 - my) ** 2)
     vis.sort(byNear)
     let gaps = 0
     for (const [tx, ty] of vis) {
-      const key = `${zt}:${tx}:${ty}`
-      if (zt === zb) { if (!this.base.has(`${tx}:${ty}`)) gaps++; continue }
+      if (zbuild === zb) { if (!this.base.has(`${tx}:${ty}`)) gaps++; continue }
+      const key = `${zbuild}:${tx}:${ty}`
       const cv = this.tiles.get(key)
       if (cv) { this.tiles.delete(key); this.tiles.set(key, cv); continue }
-      if (budget()) this.tiles.set(key, this.make(render, zt, tx, ty))
+      if (budget()) this.tiles.set(key, this.make(render, zbuild, tx, ty))
       else gaps++
     }
-    if (!gaps && zt !== zb) {
+    if (!gaps && zbuild === zt && zt !== zb) {
       const ring = this.span(zt, vx0 - tw, vy0 - tw, vx1 + tw, vy1 + tw).filter(([tx, ty]) => !this.tiles.has(`${zt}:${tx}:${ty}`)).sort(byNear)
       for (const [tx, ty] of ring) { if (!budget()) { gaps++; break } this.tiles.set(`${zt}:${tx}:${ty}`, this.make(render, zt, tx, ty)) }
     }
 
-    // 3. which complete level to show: the target if whole, else the one already up, else the
-    //    nearest whole level (finer first when zooming out, coarser when zooming in), else the overview
-    const visOf = (z: number) => this.span(z, vx0, vy0, vx1, vy1)
-    let show = -Infinity
-    if (this.complete(zt, vis)) show = zt
-    else if (this.shown !== null && this.shown !== zt && this.shown >= zb && this.complete(this.shown, visOf(this.shown))) show = this.shown
-    else {
-      for (let d = 1; d <= 3 && show === -Infinity; d++) {
-        for (const z of [zt + d, zt - d]) if (z > zb && this.complete(z, visOf(z))) { show = z; break }
-      }
-      if (show === -Infinity) show = zb
-    }
+    // 3. which complete level to show: the target if whole; else a finer one already whole (it
+    //    only shrinks, so stays crisp); else the finest whole level below; at worst the overview
+    let show = zb
+    for (const z of [zt, zt + 1, zt + 2]) if (z > zb && this.complete(z, visOf(z))) { show = z; break }
+    if (show === zb) for (let z = zt - 1; z > zb; z--) if (this.complete(z, visOf(z))) { show = z; break }
     if (this.shown !== null && show !== this.shown && !still && this.complete(this.shown, visOf(this.shown))) this.fade = { from: this.shown, t0 }
     this.shown = show
 
