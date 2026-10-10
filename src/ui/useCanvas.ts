@@ -1,5 +1,9 @@
 // A pan-and-zoom canvas: wheel or pinch to zoom at the pointer, drag to pan, click to pick.
 // Draws on demand (only when something changed), sized for the device pixel ratio.
+//
+// The wheel sets a zoom target rather than the zoom itself: each event's delta is normalised
+// (lines and pages become pixels) and capped, so a hard flick on a trackpad or a fast wheel
+// cannot hurl the view to its limit, and the camera eases toward the target over a few frames.
 
 import { useCallback, useEffect, useRef } from 'react'
 import { prefersStill } from '@/core/settings'
@@ -19,8 +23,9 @@ interface Options {
   draw: (ctx: CanvasRenderingContext2D, api: CanvasApi, t: number) => void
   onPick?: (sx: number, sy: number, api: CanvasApi) => void
   onHover?: (sx: number, sy: number, api: CanvasApi) => void
-  minK?: number
-  maxK?: number
+  /** zoom limits; a function is read each time, for limits that follow the content */
+  minK?: number | (() => number)
+  maxK?: number | (() => number)
   animate?: boolean       // keep drawing every frame (for twinkles and drifting skies)
 }
 
@@ -32,6 +37,8 @@ export function useCanvas(opts: Options) {
   const optsRef = useRef(opts)
   optsRef.current = opts
   const fly = useRef<{ from: Camera; to: Camera; t0: number; ms: number } | null>(null)
+  /** where the wheel is taking the zoom, and the screen point it zooms about */
+  const wheel = useRef<{ k: number; sx: number; sy: number } | null>(null)
 
   const toWorld = useCallback((sx: number, sy: number) => {
     const c = camera.current, s = size.current
@@ -43,6 +50,7 @@ export function useCanvas(opts: Options) {
   }, [])
   const redraw = useCallback(() => { dirty.current = true }, [])
   const flyTo = useCallback((to: Camera, ms = 1000) => {
+    wheel.current = null
     if (prefersStill() || ms <= 0) { camera.current = { ...to }; dirty.current = true; return }
     fly.current = { from: { ...camera.current }, to, t0: performance.now(), ms }
   }, [])
@@ -64,7 +72,18 @@ export function useCanvas(opts: Options) {
     const ro = new ResizeObserver(resize)
     ro.observe(cv)
     resize()
+    let last = performance.now()
     const loop = (t: number) => {
+      const dt = Math.min(64, t - last)
+      last = t
+      const w = wheel.current
+      if (w) {
+        // ease toward the wheel's target in log space: about 90% of the way in 150 ms
+        const lk = Math.log(camera.current.k), lt = Math.log(w.k)
+        const step = Math.abs(lt - lk) < 0.002 ? lt - lk : (lt - lk) * (1 - Math.exp(-dt / 65))
+        zoomAt(w.sx, w.sy, Math.exp(step))
+        if (Math.abs(lt - Math.log(camera.current.k)) < 0.0005) wheel.current = null
+      }
       const f = fly.current
       if (f) {
         const u = Math.min(1, (t - f.t0) / f.ms)
@@ -94,7 +113,8 @@ export function useCanvas(opts: Options) {
       const r = cv.getBoundingClientRect()
       return { x: e.clientX - r.left, y: e.clientY - r.top }
     }
-    const clampK = (k: number) => Math.max(optsRef.current.minK ?? 0.02, Math.min(optsRef.current.maxK ?? 40, k))
+    const limit = (v: number | (() => number) | undefined, d: number) => (typeof v === 'function' ? v() : v ?? d)
+    const clampK = (k: number) => Math.max(limit(optsRef.current.minK, 0.02), Math.min(limit(optsRef.current.maxK, 40), k))
     const zoomAt = (sx: number, sy: number, factor: number) => {
       const before = toWorld(sx, sy)
       camera.current.k = clampK(camera.current.k * factor)
@@ -108,6 +128,7 @@ export function useCanvas(opts: Options) {
       const p = local(e)
       pts.set(e.pointerId, p)
       fly.current = null
+      wheel.current = null
       if (pts.size === 1) down = { ...p, moved: false }
       if (pts.size === 2) {
         const [a, b] = [...pts.values()]
@@ -144,7 +165,16 @@ export function useCanvas(opts: Options) {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const p = local(e)
-      zoomAt(p.x, p.y, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)))
+      fly.current = null
+      // pixels, whatever the device reports; a pinch (ctrlKey) moves in small, fine steps
+      const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? size.current.h : 1)
+      const step = Math.max(-1, Math.min(1, px / 240)) * (e.ctrlKey ? 0.6 : 0.36)
+      // the target may run at most ~3x ahead of the view, so momentum scrolling stays in hand
+      const now = camera.current.k
+      const from = wheel.current?.k ?? now
+      const k = clampK(Math.min(now * 3, Math.max(now / 3, from * Math.exp(-step))))
+      if (prefersStill()) { zoomAt(p.x, p.y, k / camera.current.k); return }
+      wheel.current = { k, sx: p.x, sy: p.y }
     }
     const onLeave = () => optsRef.current.onHover?.(-1, -1, apiRef.current)
     cv.addEventListener('pointerdown', onDown)

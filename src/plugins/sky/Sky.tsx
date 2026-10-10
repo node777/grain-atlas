@@ -74,7 +74,7 @@ export function Sky({ route }: ViewProps) {
   const [date, setDate] = useState<Date>(isNaN(initial.getTime()) ? new Date() : initial)
   const [speed, setSpeed] = useState(0)
   const [mode, setMode] = useState<'astrolabe' | 'dome'>(route.params.mode === 'astrolabe' ? 'astrolabe' : 'dome')  // inside the sky by default
-  const [instrument, setInstrument] = useState(1)
+  const [instrument, setInstrument] = useState(0.5)  // the brass half faded, the sky showing through
   const [culture, setCulture] = useState<CultureId>('indian')
   const [figures, setFigures] = useState(true)
   const [cat, setCat] = useState<Catalog | null>(null)

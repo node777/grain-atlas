@@ -10,6 +10,10 @@
 // Each tile is drawn with a margin of real map around it that is never shown: when a tile is
 // scaled between levels, smoothing reads into the margin instead of into transparency, so tile
 // edges never show as faint lines.
+//
+// Zooming out builds the coarser target straight away (its tiles are a quarter as many) instead
+// of climbing up from the overview again, and once a level is whole the next level out is made
+// across twice the view, so a zoom out usually finds it ready.
 
 import type { Camera } from '@/ui/useCanvas'
 import { targetLevel, shownLevel, buildLevel, LruStore } from './levels'
@@ -44,6 +48,8 @@ export class TileCache {
   private base = 0
   private target: number | null = null
   private shown: number | null = null
+  /** the last level that was the target and shown: where a zoom out starts from */
+  private settled: number | null = null
   private fade: { from: number; t0: number } | null = null
   /** A running estimate of one tile's cost, so a frame does not start a tile it cannot finish. */
   private cost = 3
@@ -56,6 +62,7 @@ export class TileCache {
     this.key = key
     this.recycle(this.tiles.clear())
     this.shown = null
+    this.settled = null
     this.fade = null
   }
 
@@ -69,7 +76,7 @@ export class TileCache {
 
     const target = this.target = targetLevel(Math.log2(cam.k * view.dpr), this.target)
     const base = Math.min(target, overviewLevel(world))
-    if (base !== this.base) { this.base = base; this.shown = null }
+    if (base !== this.base) { this.base = base; this.shown = null; this.settled = null }
 
     // make tiles: the whole overview first (it is small, and the last resort), then the build
     // level's visible tiles, then a ring around the target once it is whole
@@ -89,15 +96,19 @@ export class TileCache {
       return missing
     }
     let missing = ensure(base, spanOf(base, world))
-    const shownBefore = this.shown ?? base
-    const build = buildLevel(target, shownBefore, complete)
+    const zoomingOut = this.settled !== null && target < this.settled
+    const build = buildLevel(target, zoomingOut ? target - 1 : this.shown ?? base, complete)
     missing += ensure(build, nearestFirst(visible(build)))
-    if (build === target && !missing) missing += ensure(target, nearestFirst(spanOf(target, grow(viewBox, TILE / 2 ** target))))
+    const ring = spanOf(target, grow(viewBox, TILE / 2 ** target))
+    const outer = target - 1 > base ? spanOf(target - 1, widen(viewBox, 2)) : []
+    if (build === target && !missing) missing += ensure(target, nearestFirst(ring))
+    if (build === target && !missing) missing += ensure(target - 1, nearestFirst(outer))
 
     // show one complete level; fade out the one it replaces
     const shown = shownLevel(target, this.shown, base, complete)
     if (this.shown !== null && shown !== this.shown && !still && complete(this.shown)) this.fade = { from: this.shown, t0 }
     this.shown = shown
+    if (shown === target) this.settled = target
     if (this.fade && (t0 - this.fade.t0 >= FADE_MS || this.fade.from === shown || !complete(this.fade.from))) this.fade = null
 
     ctx.save()
@@ -115,7 +126,8 @@ export class TileCache {
     const keep = new Set<string>()
     const hold = (z: number, span: Span) => { for (const [tx, ty] of span) keep.add(keyOf(z, tx, ty)) }
     hold(base, spanOf(base, world))
-    hold(target, spanOf(target, grow(viewBox, TILE / 2 ** target)))
+    hold(target, ring)
+    hold(target - 1, outer)
     for (const z of [shown, build, this.fade?.from]) if (z !== undefined) hold(z, visible(z))
     this.recycle(this.tiles.evict(Math.max(MIN_CAPACITY, keep.size * 1.25), (k) => keep.has(k)))
     return missing > 0 || shown !== target || this.fade !== null
@@ -171,6 +183,12 @@ function boxOfView(cam: Camera, view: View): Box {
 }
 
 const grow = (b: Box, d: number): Box => ({ x0: b.x0 - d, y0: b.y0 - d, x1: b.x1 + d, y1: b.y1 + d })
+
+/** A box scaled about its centre: what the view will cover after zooming out by `f`. */
+const widen = (b: Box, f: number): Box => {
+  const hx = ((b.x1 - b.x0) * (f - 1)) / 2, hy = ((b.y1 - b.y0) * (f - 1)) / 2
+  return { x0: b.x0 - hx, y0: b.y0 - hy, x1: b.x1 + hx, y1: b.y1 + hy }
+}
 
 /** The coarsest level worth drawing: the whole world in about two tiles across. */
 function overviewLevel(world: Box): number {

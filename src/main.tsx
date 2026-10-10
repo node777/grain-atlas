@@ -2,14 +2,13 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/global.css'
 import { registerPlugins } from '@/core/registry'
-import { applyTheme, settings, settlePlaceOnce } from '@/core/settings'
+import { settings, settlePlaceOnce } from '@/core/settings'
 import { loadRepo } from '@/grain/repo'
 import { PLUGINS } from '@/plugins'
 import { Shell } from '@/app/Shell'
 
 registerPlugins(PLUGINS)
 console.info('%cGrain Atlas%c  an atlas of grain, by DJINN', 'font: italic 16px Vollkorn, Georgia, serif; color: #d9b45a', 'font: 12px sans-serif; color: #b4a892')
-applyTheme(settings.get())
 if (settings.get().introSeen) settlePlaceOnce()
 loadRepo()
 
