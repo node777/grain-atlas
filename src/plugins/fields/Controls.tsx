@@ -4,8 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@/core/store'
 import { fieldsPrefs, type FieldsNames, type FieldsPrefs } from './prefs'
-import { drawGlyph, mountain, tree, KIND_INFO, KIND_COUNT, Kind } from './glyphs'
-import { inkFrom } from './mapdraw'
+import { drawGlyph, mountain, tree, inkFrom, KIND_INFO, KIND_COUNT, Kind } from './glyphs'
 
 const NAMES: Array<[FieldsNames, string]> = [['all', 'All'], ['places', 'Places'], ['none', 'None']]
 

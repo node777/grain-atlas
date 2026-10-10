@@ -96,6 +96,32 @@ export interface Ink {
   night?: boolean   // drawn light on dark (Hearth): washes go softer
 }
 
+/** The map's inks, from the theme's colours. */
+export function inkFrom(C: Record<string, string>, stone: boolean): Ink {
+  return {
+    ink: C['--ink'], land: stone ? C['--surface-2'] : C['--surface'], sea: C['--page'],
+    roof: C['--madder'], roof2: C['--annatto'], wheat: C['--weld'], green: C['--sage'],
+    elder: C['--elder'], brass: C['--brass'], lead: C['--ink-2'],
+    stone: C['--ink-3'], dim: C['--ink-3'], shade: stone ? C['--ink'] : C['--page'], night: !stone,
+  }
+}
+
+/** Below this many css pixels per file plot, files are land-use dots and settlements get signs. */
+export const DOTS_BELOW = 2.4
+/** Below this, a mark is a simple shape; above, its full drawing. */
+export const SIMPLE_BELOW = 6.5
+/** Marks stop growing past this size, as a map symbol keeps its size however close you look. */
+const GLYPH_MAX = 46
+
+/** How big a mark is drawn (css px) when a file plot is `cellPx` across: as big as its plot,
+ *  then growing only slowly past GLYPH_MAX. Fields are ground and always fill their plot. */
+export function markSize(k: Kind, cellPx: number, scale = 1): number {
+  const s = k === Kind.Field || cellPx <= GLYPH_MAX ? cellPx : GLYPH_MAX + (cellPx - GLYPH_MAX) * 0.25
+  return s * scale
+}
+/** Close in, buildings stand in yards once their plots outgrow them. */
+export const yardsAt = (cellPx: number) => cellPx > GLYPH_MAX * 1.15
+
 /** The one roof dye of each kind of building (and the land-use tint of each kind of mark). */
 export function kindTint(k: Kind, I: Ink): string {
   switch (k) {

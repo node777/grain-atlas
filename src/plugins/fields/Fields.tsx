@@ -27,6 +27,8 @@ import './fields.css'
 
 interface Pick { plot?: Plot; grain?: Grain; regionName?: string; glyph?: number }
 
+let treeCount = 0
+
 // the atlas is worked out once per tree, the first time the map is asked for
 const atlases = new WeakMap<World, Atlas>()
 const atlasFor = (world: World, entries: Parameters<typeof buildAtlas>[1]) => {
@@ -83,12 +85,15 @@ function fogTile(color: string): HTMLCanvasElement {
 }
 
 export function Fields({ route }: ViewProps) {
-  const r = useStore(repo, (s) => ({ entries: s.entries, version: s.version, phase: s.phase }))
+  const r = useStore(repo, (s) => ({ entries: s.entries, phase: s.phase }))
   const seeds = useStore(progress, (p) => p.seeds)
   const active = useStore(progress, (p) => p.activeJourney)
   const mode = useStore(settings, (s) => s.mode)
   const prefs = useStore(fieldsPrefs)
-  const world = useMemo<World | null>(() => (r.entries.size > 1 ? layoutWorld(r.entries) : null), [r.version])
+  // the land follows the tree itself, not every change to the repo: reading a page folds its
+  // header into the same entries (bumping the repo's version), which must not redraw the map
+  const world = useMemo<World | null>(() => (r.entries.size > 1 ? layoutWorld(r.entries) : null), [r.entries])
+  const treeId = useMemo(() => ++treeCount, [r.entries])
   const geo = useMemo<Geo | null>(() => (world ? buildGeo(world) : null), [world])
   const atlas = useMemo<Atlas | null>(() => (world && prefs.view === 'map' ? atlasFor(world, r.entries) : null), [world, prefs.view])
   const isMap = !!atlas
@@ -149,7 +154,7 @@ export function Fields({ route }: ViewProps) {
         if (gi >= 0) {
           const path = atlas.path[gi]
           return {
-            plot: atlas.glyphPlot[gi], regionName: land.region.name, glyph: gi,
+            plot: atlas.plot[gi], regionName: land.region.name, glyph: gi,
             grain: { path, name: path.slice(path.lastIndexOf('/') + 1), x: atlas.gx[gi], y: atlas.gy[gi], a: 0 },
           }
         }
@@ -192,14 +197,14 @@ export function Fields({ route }: ViewProps) {
       }
       if (atlas && colorsGen.current) {
         const m = mapR.current!
-        m.prepare(world, atlas, colors.current, mode === 'stone', prefs.relief, a.size.current.dpr, `${r.version}|${colorsGen.current}`)
+        m.prepare(world, atlas, colors.current, mode === 'stone', prefs.relief, a.size.current.dpr, `${treeId}|${colorsGen.current}`)
         m.draw(ctx, a, world, geo, atlas, scene, prefs, hoverGlyph.current, stats)
       } else if (!atlas) {
         drawFields(ctx, a, world, geo, scene)
       }
       if (miniRef.current) {
         mini.current.draw(miniRef.current, world, geo, colors.current, discovered, a.camera.current, a.size.current,
-          `${r.version}|${mode}|${discovered.size}|${prefs.view}`, atlas)
+          `${treeId}|${mode}|${discovered.size}|${prefs.view}`, atlas)
       }
     },
     onHover: (sx, sy, a) => {

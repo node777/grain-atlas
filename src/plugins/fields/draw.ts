@@ -79,7 +79,7 @@ export interface Scene {
 // ---- frame state (module-level so hot loops allocate nothing; the map view reads it too)
 export let K = 1, OX = 0, OY = 0, W = 0, H = 0
 export const board = new LabelBoard()
-export let fogPattern: CanvasPattern | null = null
+let fogPattern: CanvasPattern | null = null
 let fogSource: HTMLCanvasElement | null = null
 
 interface Label { kind: 0 | 1; text: string; sub: string; x: number; y: number; r: number; size: number; depth: number; pr: number }
