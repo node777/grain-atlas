@@ -1,13 +1,15 @@
 .sky { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 80% at 40% 50%, #1e1915 0%, var(--sky) 60%, var(--sky-deep) 100%); color: #e9dcc0; }
-/* the astrolabe lies on the table: the page's own linen shows around the disc */
-.sky.on-table {
-  background-color: var(--page);
-  background-image:
-    repeating-linear-gradient(0deg, rgba(var(--thread), var(--thread-a)) 0 1px, transparent 1px 4px),
-    repeating-linear-gradient(90deg, rgba(var(--thread), calc(var(--thread-a) * 0.8)) 0 1px, transparent 1px 4px);
-}
-.sky-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
-.sky-canvas:active { cursor: grabbing; }
+.sky { overflow: hidden; }
+/* space behind the instrument: painted once, larger than the view so it can drift for parallax */
+.sky-space { position: absolute; left: -3%; top: -3%; width: 106%; height: 106%; display: block; pointer-events: none; opacity: 0; }
+/* the instrument in depth: one perspective, the parts at their own depths (set from Sky.tsx) */
+.sky-stage { position: absolute; inset: 0; cursor: grab; touch-action: none; }
+.sky-stage:active { cursor: grabbing; }
+.sky-object { position: absolute; inset: 0; transform-style: preserve-3d; pointer-events: none; }
+.sky-layer { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+.sky-sheen { position: absolute; border-radius: 50%; pointer-events: none; display: none; }
+/* the instrument's walls: drawn per tilt, flat behind the tilted layers */
+.sky-edge { position: absolute; display: none; pointer-events: none; }
 .sky-dial, .sky-time, .sky-selected { background: rgba(27, 23, 19, 0.84); border-color: #3a3027; backdrop-filter: blur(4px); color: #e9dcc0; }
 .sky-dial .faint, .sky-time .faint, .sky-selected .faint { color: #8f816b; }
 .sky-dial .chip { background: #2a221b; border-color: #4a3d30; color: #e9dcc0; }

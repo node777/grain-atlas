@@ -16,7 +16,7 @@ import { RASHIS } from '@/astro/data/rashis'
 import { type Catalog, type CultureId, starName } from './catalog'
 import { type Frames, type Proj, type V3, composite, eclVec, mul, project } from './projection'
 import { type Palette, palette, rgba } from './palette'
-import { type Disc, type Scene, THRONE, claimCardinals, discOf, drawOver, drawRule, drawUnder, eraseOutside } from './instrument'
+import { type Disc, type Scene, claimCardinals, discOf, drawGround, drawOver, drawRule, drawUnder, eraseOutside } from './instrument'
 import {
   BAND, NAK, STAR_COLS, drawRete, figuresOf, limitMagFor, reteStars, ringStrength, starRadius, starTable,
 } from './rete'
@@ -31,8 +31,6 @@ export interface SkyOptions {
   lat: number
   lon: number
   selected?: { kind: 'star' | 'body'; id: number | string } | null
-  /** the page behind the canvas is the night (the dome) rather than the table (the astrolabe) */
-  cssNight: boolean
   /** the camera sits exactly on the pole and nothing is flying: the rete may be cached and turned */
   atPole: boolean
   /** nothing is moving: a turned rete cache may be redrawn crisp */
@@ -40,6 +38,17 @@ export interface SkyOptions {
 }
 
 export type Pick = { kind: 'star' | 'body'; id: number | string } | null
+
+/** The four canvases the sky is drawn in, back to front; in the astrolabe they sit at different depths. */
+export interface SkyLayers {
+  plate: CanvasRenderingContext2D   // the night and the plate's engraving (fixed to the observer)
+  rete: CanvasRenderingContext2D    // what turns: Milky Way, stars, band, grahas, and their names
+  limb: CanvasRenderingContext2D    // the mater's limb and throne (fixed)
+  top: CanvasRenderingContext2D     // the rule
+}
+
+/** How far the flat instrument is out: it falls away early as you step inside. */
+export const flatOf = (inst: number, blend: number) => inst * Math.pow(Math.max(0, Math.min(1, (blend - 0.35) / 0.65)), 1.6)
 
 const VS = '︎' // text presentation, never an emoji
 const GLYPH: Record<string, string> = {
@@ -115,8 +124,8 @@ interface Pending { x: number; y: number; text: string; mag: number; yoga: boole
 export interface FrameStats { ms: number; reteCached: boolean; layersRebuilt: number }
 
 export class SkyRenderer {
-  private under = layer()
-  private over = layer()
+  private plateKey = ''
+  private limbKey = ''
   private rete = layer()
   private reteAngle = 0         // the screen angle of the equinox when the rete cache was drawn
   private reteDate = 0
@@ -138,9 +147,14 @@ export class SkyRenderer {
   stats: FrameStats = { ms: 0, reteCached: false, layersRebuilt: 0 }
 
   /** Fonts arrived or the theme changed: every cached layer and measured width is stale. */
-  invalidate() { this.fontsGen++; widths.clear(); if (this.under) this.under.key = ''; if (this.over) this.over.key = ''; if (this.rete) this.rete.key = '' }
+  invalidate() { this.fontsGen++; widths.clear(); this.plateKey = ''; this.limbKey = ''; if (this.rete) this.rete.key = '' }
 
-  draw(ctx: CanvasRenderingContext2D, p: Proj, F: Frames, cat: Catalog, sky: SkyMoment, o: SkyOptions, dpr: number) {
+  /**
+   * Draw a frame into the four layers. The plate and the mater only change with the camera
+   * (they are fixed to the observer), so they are redrawn only when it moves; turning time
+   * redraws the rete and the rule alone.
+   */
+  draw(L: SkyLayers, p: Proj, F: Frames, cat: Catalog, sky: SkyMoment, o: SkyOptions, dpr: number, off = { x: 0, y: 0 }) {
     const t0 = performance.now()
     let rebuilt = 0
     const pal = palette()
@@ -149,44 +163,47 @@ export class SkyRenderer {
     const north = o.lat >= 0
     const pole = mul(F.eqd, [0, 0, north ? 1 : -1])
     // the flat brass falls away early as you step inside; the rings rise as it goes
-    const flat = inst * Math.pow(Math.max(0, Math.min(1, (blend - 0.35) / 0.65)), 1.6)
+    const flat = flatOf(inst, blend)
     const arm = inst * Math.pow(Math.max(0, Math.min(1, (0.75 - blend) / 0.75)), 1.2)
     const disc = flat > 0.005 ? discOf(p, pole, sky.obliquity) : null
-    const sc: Scene = { p, F, sky, pal, inst, blend, reteA: flat, arm, lat: o.lat, north, pole, disc, dpr, cssNight: o.cssNight }
+    const sc: Scene = { p, F, sky, pal, inst, blend, reteA: flat, arm, lat: o.lat, north, pole, disc, dpr }
     const zoomK = Math.max(0.75, Math.min(2.6, 70 / Math.max(20, fovOf(p))))
     const W = Math.round(p.w * dpr), H = Math.round(p.h * dpr)
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.globalAlpha = 1
-    ctx.globalCompositeOperation = 'source-over'
+    // the layers may be cropped to the disc: `off` is their top-left corner on the stage
+    const ox0 = Math.round(off.x * dpr), oy0 = Math.round(off.y * dpr)
     // measurement scripts may collect frame times here (window.__skyProf = {})
     const PROF = (globalThis as { __skyProf?: Record<string, number[]> }).__skyProf
-
-    // ---- the still layers. While the camera moves they are drawn straight onto the canvas (a
-    // cache would be stale next frame); once it rests they are cached, cropped to the disc when
-    // the astrolabe is fully out, so turning the rete costs three small copies.
-    const camKey = [W, H, dpr, p.cx.toFixed(2), p.cy.toFixed(2), p.scale.toFixed(4), p.fwd.map((x) => x.toFixed(6)).join(','),
-      inst.toFixed(3), blend.toFixed(4), o.lat.toFixed(4), pal.mode, sky.obliquity.toFixed(3), o.cssNight, this.fontsGen].join('|')
+    const fresh = (c: CanvasRenderingContext2D) => {
+      c.setTransform(1, 0, 0, 1, 0, 0)
+      c.globalAlpha = 1
+      c.globalCompositeOperation = 'source-over'
+      c.clearRect(0, 0, c.canvas.width, c.canvas.height)
+      c.setTransform(dpr, 0, 0, dpr, -ox0, -oy0)
+    }
+    // the night is painted only inside the disc; outside it, while the instrument is only partly
+    // out, everything is cut back by how far out it is
     const full = sc.reteA < 1 || !disc
-    const ub = full ? null : pixelBox(disc!.x, disc!.y, disc!.Ro + 2, disc!.Ro + 2, disc!.Ro + 2, dpr, W, H)
-    const ob = full ? null : pixelBox(disc!.x, disc!.y, disc!.Ro * 1.1, disc!.Ro * (1.05 + THRONE + 0.12), disc!.Ro * 1.12, dpr, W, H)
-    const layered = !!(this.under && this.over) && (this.under.key === camKey || o.settled)
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.clearRect(0, 0, W, H)
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    if (layered && this.under) {
-      if (this.under.key !== camKey) {
-        renderLayer(this.under, W, H, dpr, (c) => drawUnder(c, sc))
-        this.under.key = camKey
-        rebuilt++
-      }
-      blit(ctx, this.under.cv, ub, W, H, dpr)
-    } else {
-      if (this.under) this.under.key = ''
-      drawUnder(ctx, sc)
+
+    // ---- the plate and the mater: fixed to the observer
+    const camKey = [W, H, dpr, ox0, oy0, L.plate.canvas.width, L.plate.canvas.height, p.cx.toFixed(2), p.cy.toFixed(2), p.scale.toFixed(4), p.fwd.map((x) => x.toFixed(6)).join(','),
+      inst.toFixed(3), blend.toFixed(4), o.lat.toFixed(4), pal.mode, sky.obliquity.toFixed(3), this.fontsGen].join('|')
+    if (this.plateKey !== camKey) {
+      fresh(L.plate)
+      drawUnder(L.plate, sc)
+      if (disc && full && sc.reteA > 0.01) eraseOutside(L.plate, disc, sc.reteA, p)
+      this.plateKey = camKey
+      rebuilt++
+    }
+    if (this.limbKey !== camKey) {
+      fresh(L.limb)
+      drawOver(L.limb, sc)
+      this.limbKey = camKey
+      rebuilt++
     }
 
     // ---- the rete
+    const ctx = L.rete
+    fresh(ctx)
     const ay = sky.ayanamsa
     const moon = sky.bodies.find((b) => b.id === 'moon')!
     const highlight = Math.floor((((moon.sidereal % 360) + 360) % 360) / NAK)
@@ -233,7 +250,7 @@ export class SkyRenderer {
       }
       turn = angDiff(angNow, this.reteAngle)
       ctx.save()
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.setTransform(1, 0, 0, 1, -ox0, -oy0)
       if (Math.abs(turn) < 1e-6) {
         ctx.drawImage(this.rete.cv, ox, oy)
       } else {
@@ -269,21 +286,8 @@ export class SkyRenderer {
     this.drawYogataras(ctx, sc, cat, o, discClip)
     const glabels = this.drawBodies(ctx, sc, o, zoomK, discClip)
 
-    // ---- the mater over the rete, and the table around it
-    if (layered && this.over) {
-      if (this.over.key !== camKey) {
-        renderLayer(this.over, W, H, dpr, (c) => drawOver(c, sc))
-        this.over.key = camKey
-        rebuilt++
-      }
-      // cut the night away outside the rim, as far as the instrument is out (when it is fully
-      // out, nothing was drawn there to cut)
-      if (disc && full && sc.reteA > 0.01) eraseOutside(ctx, disc, sc.reteA, p)
-      blit(ctx, this.over.cv, ob, W, H, dpr)
-    } else {
-      if (this.over) this.over.key = ''
-      drawOver(ctx, sc) // erases outside the rim itself
-    }
+    // ---- the ground below the horizon, veiled (on the plate's own disc, while the astrolabe is out)
+    if (disc && !full) { ctx.save(); ctx.beginPath(); ctx.arc(disc.x, disc.y, disc.R, 0, Math.PI * 2); ctx.clip(); drawGround(ctx, sc); ctx.restore() } else drawGround(ctx, sc)
 
     // ---- names: the board
     nBox = 0
@@ -299,12 +303,17 @@ export class SkyRenderer {
       boardAdd(b.x - 5, b.y - 5, b.x + 5, b.y + 5)
     }
     this.drawLagna(ctx, sc)
-    if (sc.reteA > 0.02) {
-      const sun = sky.bodies.find((b) => b.id === 'sun')!
-      drawRule(ctx, sc, mul(F.ect, eclVec(sun.tropical, 0)))
-    }
+    const sunB = sky.bodies.find((b) => b.id === 'sun')!
+    const sunOnEcl = mul(F.ect, eclVec(sunB.tropical, 0))
+    // the rule's shadow lies on the rete; the rule itself rides above it, on its own layer
+    if (sc.reteA > 0.02) drawRule(ctx, sc, sunOnEcl, 'shadow')
     this.drawLabels(ctx, sc, cat, o, glabels, zoomK)
     this.drawSelected(ctx, sc, cat, o)
+    if (disc && full && sc.reteA > 0.01) eraseOutside(ctx, disc, sc.reteA, p)
+
+    // ---- the rule, on top of everything
+    fresh(L.top)
+    if (sc.reteA > 0.02) drawRule(L.top, sc, sunOnEcl, 'body')
 
     this.last = { p, F, cat, zoomK, disc, reteA: sc.reteA }
     this.stats.ms = performance.now() - t0
@@ -650,7 +659,7 @@ export class SkyRenderer {
     for (const g of glabels) {
       const ls = this.ls
       ctx.font = g.minor ? `${(11.5 * ls).toFixed(1)}px "Public Sans", ${SYMBOL_FONT}, sans-serif` : `600 ${(13 * ls).toFixed(1)}px "Public Sans", ${SYMBOL_FONT}, sans-serif`
-      placeGraha(ctx, g, pal)
+      placeGraha(ctx, g, pal, p.w)
     }
     if (o.showFigures && zoomK > 0.9) {
       const f = figuresOf(cat, o.culture)
@@ -750,29 +759,6 @@ export class SkyRenderer {
 
 const MB = new Float64Array(9)
 
-/** A layer's box in device pixels (left/right/bottom extents and a taller top for the throne). */
-function pixelBox(x: number, y: number, side: number, top: number, bottom: number, dpr: number, W: number, H: number) {
-  const x0 = Math.max(0, Math.floor((x - side) * dpr)), x1 = Math.min(W, Math.ceil((x + side) * dpr))
-  const y0 = Math.max(0, Math.floor((y - top) * dpr)), y1 = Math.min(H, Math.ceil((y + bottom) * dpr))
-  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null
-}
-
-function renderLayer(l: Layer, W: number, H: number, dpr: number, paint: (c: CanvasRenderingContext2D) => void) {
-  sizeLayer(l, W, H)
-  const c = l.ctx
-  c.setTransform(1, 0, 0, 1, 0, 0)
-  c.clearRect(0, 0, W, H)
-  c.setTransform(dpr, 0, 0, dpr, 0, 0)
-  paint(c)
-}
-
-/** Copy a full-canvas layer, or only its box, pixel for pixel. */
-function blit(ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, b: { x: number; y: number; w: number; h: number } | null, W: number, H: number, dpr: number) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-  if (b) ctx.drawImage(cv, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h)
-  else ctx.drawImage(cv, 0, 0, W, H)
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-}
 const FIG_DY = [14, -12, 0, 26]
 const GRAHA_ANGLES = [0, -0.55, 0.55, Math.PI, Math.PI + 0.55, Math.PI - 0.55, -Math.PI / 2, Math.PI / 2]
 const GRAHA_STEPS = [0, 14, 28, 46]
@@ -780,7 +766,7 @@ const GRAHA_STEPS = [0, 14, 28, 46]
 const angDiff = (a: number, b: number) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d }
 
 /** A graha's name: beside it when there is room, otherwise led out along a fine line. */
-function placeGraha(ctx: CanvasRenderingContext2D, g: { x: number; y: number; r: number; text: string; sel: boolean; col: string; minor: boolean }, pal: Palette) {
+function placeGraha(ctx: CanvasRenderingContext2D, g: { x: number; y: number; r: number; text: string; sel: boolean; col: string; minor: boolean }, pal: Palette, stageW: number) {
   const wdt = tw(ctx, g.text), hh = 16
   let bx = g.x + g.r + 5, by = g.y, step = 0, found = false
   for (const dd of GRAHA_STEPS) {
@@ -790,7 +776,7 @@ function placeGraha(ctx: CanvasRenderingContext2D, g: { x: number; y: number; r:
       const c = Math.cos(a)
       const x0 = Math.abs(c) < 0.2 ? ax - wdt / 2 : c > 0 ? ax : ax - wdt
       const yc = Math.abs(c) < 0.2 ? ay + Math.sign(Math.sin(a)) * hh * 0.5 : ay
-      if (x0 < 2 || x0 + wdt > ctx.canvas.clientWidth - 2) continue
+      if (x0 < 2 || x0 + wdt > stageW - 2) continue
       if (boardFree(x0 - 2, yc - hh / 2, x0 + wdt + 2, yc + hh / 2)) { bx = x0; by = yc; step = dd; found = true; break }
     }
     if (found) break

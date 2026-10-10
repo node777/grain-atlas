@@ -2,10 +2,16 @@
 // the land between settlements is drawn in the old atlas manner: hachured peaks, molehill hills,
 // round-crowned woods and grass tufts. Everything draws in pixel space around a centre, at a
 // cell size `s` (pixels per file plot), so the same mark serves the tiles, the key and the hover.
+//
+// Each kind of building wears one roof dye from the Linengrow palette, everywhere it appears,
+// and the key in the settings is drawn by this same code, so the two never drift apart.
 
-export const Kind = { House: 0, Field: 1, Mill: 2, Forge: 3, Stone: 4, Tree: 5, Post: 6, Cairn: 7 } as const
+export const Kind = {
+  House: 0, Field: 1, Mill: 2, Forge: 3, Stone: 4, Tree: 5, Post: 6, Cairn: 7,
+  Landmark: 8, Court: 9, Archive: 10, Tower: 11,
+} as const
 export type Kind = (typeof Kind)[keyof typeof Kind]
-export const KIND_COUNT = 8
+export const KIND_COUNT = 12
 
 /** What each mark stands for, for the key and the hover note. Order matches Kind. */
 export const KIND_INFO: Array<{ name: string; means: string }> = [
@@ -17,7 +23,15 @@ export const KIND_INFO: Array<{ name: string; means: string }> = [
   { name: 'tree', means: 'an image or other media' },
   { name: 'signpost', means: 'a link to somewhere else' },
   { name: 'cairn', means: 'anything else' },
+  { name: 'landmark', means: "a folder's README: a cathedral at the root, a keep for a room, a church, then a chapel deeper down" },
+  { name: 'courthouse', means: 'a licence or notice' },
+  { name: 'archive', means: 'a dated log or changelog' },
+  { name: 'watchtower', means: 'a test' },
 ]
+
+/** Landmark tiers, by how deep the README's folder sits: size, and which building. */
+export const TIER_SCALE = [2.3, 1.75, 1.4, 1.12]
+export const TIER_NAME = ['cathedral', 'keep', 'church', 'chapel']
 
 const EXT: Record<string, Kind> = Object.create(null)
 const put = (k: Kind, list: string) => { for (const e of list.split(' ')) EXT[e] = k }
@@ -28,66 +42,89 @@ put(Kind.Forge, 'c h cc cpp cxx hpp hh zig swift rs go ts tsx js jsx mjs cjs jav
 put(Kind.Stone, 'json jsonl toml yaml yml tsv csv plist manifest input example sha256 lock ini cfg conf xml env template pre_seed bin file expected golden out snap dat db sql proto')
 put(Kind.Tree, 'svg png jpg jpeg gif webp ico bmp tif tiff pdf mp3 wav ogg flac mp4 mov webm ttf otf woff woff2 psd')
 
-const PROSE_NAMES = /^(readme|license|licence|changelog|notice|authors|contributing|copying|todo)$/i
+const LANDMARK = /^(readme|index)$/i
+const COURT = /^(license|licence|copying|notice|code_of_conduct|security|authors|contributing)$/i
+const ARCHIVE = /^(changelog|changes|history|news)$/i
+const STAMPED = /^\d{8}[-_.]\d{6}/
+const TESTS = /(^|\/)(tests?|__tests__)\//i
+const TEST_NAME = /(\.test\.|_test\.|^test_|\.spec\.)/i
+const PROSE_NAMES = /^(todo|readme)$/i
 const MILL_NAMES = /^(makefile|justfile|dockerfile|rakefile|gnumakefile|procfile)$/i
 
-/** The mark for a file, from its name (and whether it is a link). Grows with grain: an unknown
+/** The mark for a file, from its path (and whether it is a link). Grows with grain: an unknown
  *  extension is a cairn until it is named here. */
 export function kindOf(path: string, isLink = false): Kind {
   if (isLink) return Kind.Post
   const name = path.slice(path.lastIndexOf('/') + 1)
   const dot = name.lastIndexOf('.')
+  const stem = dot > 0 ? name.slice(0, dot) : name
+  if (LANDMARK.test(stem)) return Kind.Landmark
+  if (COURT.test(stem)) return Kind.Court
+  if (ARCHIVE.test(stem) || STAMPED.test(name)) return Kind.Archive
+  if (TEST_NAME.test(name) || TESTS.test(path)) return Kind.Tower
   if (dot >= 0) {
     const k = EXT[name.slice(dot + 1).toLowerCase()]
     if (k !== undefined) return k
   }
-  const stem = dot > 0 ? name.slice(0, dot) : name
   if (PROSE_NAMES.test(stem)) return Kind.House
   if (MILL_NAMES.test(stem)) return Kind.Mill
   return Kind.Cairn
 }
 
-/** Settlements fill from the middle out in this order: the town core, then its trades, then
- *  the farmland, then stones, signposts and trees at the edge. */
-export const KIND_RANK: number[] = [0, 3, 2, 1, 4, 6, 5, 4]
+/** Settlements fill from the middle out in this order: the landmark at the heart, the court,
+ *  houses and archives, then the trades, then the farmland, then stones, signposts and trees. */
+export const KIND_RANK: number[] = [2, 7, 5, 4, 8, 10, 9, 9, 0, 1, 3, 6]
 /** Marks that stand on a street grid (buildings); the rest tile the ground between. */
-export const BUILT: boolean[] = [true, false, true, true, false, false, false, false]
+export const BUILT: boolean[] = [true, false, true, true, false, false, false, false, true, true, true, true]
+/** Kinds that count as dwellings for a town's sign. */
+export const DWELLING: boolean[] = [true, false, false, false, false, false, false, false, true, true, true, false]
 
 export interface Ink {
   ink: string       // line
   land: string      // paper of the land
   sea: string       // water
-  roof: string      // madder
-  roof2: string     // annatto
-  wheat: string     // weld
-  green: string     // sage
-  stone: string     // a grey for stones
+  roof: string      // madder: houses
+  roof2: string     // annatto: workshops
+  wheat: string     // weld: fields
+  green: string     // sage: mills, woods, fields
+  elder: string     // landmarks
+  brass: string     // archives
+  lead: string      // the courthouse's lead roof
+  stone: string     // a grey for stones and watchtowers
   dim: string       // ink-3
   shade: string     // the shadow side of a peak
   night?: boolean   // drawn light on dark (Hearth): washes go softer
 }
 
-/** Fill colour of a mark when it is too small to draw: the land-use tint. */
+/** The one roof dye of each kind of building (and the land-use tint of each kind of mark). */
 export function kindTint(k: Kind, I: Ink): string {
   switch (k) {
     case Kind.House: return I.roof
     case Kind.Forge: return I.roof2
-    case Kind.Mill: return I.roof2
+    case Kind.Mill: return I.green
     case Kind.Field: return I.wheat
     case Kind.Tree: return I.green
     case Kind.Stone: return I.stone
+    case Kind.Landmark: return I.elder
+    case Kind.Court: return I.lead
+    case Kind.Archive: return I.brass
+    case Kind.Tower: return I.stone
     default: return I.dim
   }
 }
 
 /** One file's mark, centred at (x, y), in a cell `s` pixels wide. `h` is the file's own hash
  *  (0..1) for small variations; `rot` the street grid's bearing (fields run with it). */
-export function drawGlyph(g: CanvasRenderingContext2D, k: Kind, x: number, y: number, s: number, h: number, rot: number, I: Ink): void {
+export function drawGlyph(g: CanvasRenderingContext2D, k: Kind, x: number, y: number, s: number, h: number, rot: number, I: Ink, tier = 3): void {
   const lw = Math.max(0.6, Math.min(1.3, s * 0.07))
   g.lineWidth = lw
   g.strokeStyle = I.ink
   switch (k) {
     case Kind.House: return house(g, x, y, s * (0.86 + h * 0.22), h, I.roof, I)
+    case Kind.Landmark: return landmark(g, x, y, s, h, tier, I)
+    case Kind.Court: return court(g, x, y, s, I)
+    case Kind.Archive: return archive(g, x, y, s, h, I)
+    case Kind.Tower: return tower(g, x, y, s, h, I)
     case Kind.Forge: return forge(g, x, y, s, h, I)
     case Kind.Mill: return mill(g, x, y, s, h, I)
     case Kind.Field: return field(g, x, y, s, h, rot, I)
@@ -168,13 +205,129 @@ function mill(g: CanvasRenderingContext2D, x: number, y: number, s: number, h: n
   g.globalAlpha = ga
   g.beginPath()
   g.moveTo(x - s * 0.2, base); g.lineTo(x - s * 0.13, top); g.lineTo(x + s * 0.13, top); g.lineTo(x + s * 0.2, base); g.closePath()
-  g.fillStyle = I.roof2; g.fill(); g.stroke()
+  g.fillStyle = I.green; g.fill(); g.stroke()
   g.beginPath()
   g.moveTo(x - s * 0.15, top); g.quadraticCurveTo(x, top - s * 0.17, x + s * 0.15, top); g.closePath()
   g.fillStyle = I.land; g.fill(); g.stroke()
   if (s > 12) {
     g.beginPath(); g.rect(x - s * 0.035, base - s * 0.14, s * 0.07, s * 0.14); g.fillStyle = I.land; g.fill(); g.stroke()
   }
+}
+
+/** A pitched roof over a wall: the common shape of the larger buildings. */
+function hall(g: CanvasRenderingContext2D, x0: number, base: number, w: number, bh: number, rh: number, roof: string, I: Ink) {
+  g.beginPath(); g.rect(x0, base - bh, w, bh); g.fillStyle = I.land; g.fill(); g.stroke()
+  g.beginPath()
+  g.moveTo(x0 - w * 0.04, base - bh); g.lineTo(x0 + w * 0.12, base - bh - rh); g.lineTo(x0 + w * 0.88, base - bh - rh); g.lineTo(x0 + w * 1.04, base - bh)
+  g.closePath(); g.fillStyle = roof; g.fill(); g.stroke()
+}
+
+/** A square tower with a spire (or battlements when `spire` is 0). */
+function steeple(g: CanvasRenderingContext2D, cx: number, base: number, w: number, th: number, spire: number, roof: string, I: Ink, finial: string) {
+  g.beginPath(); g.rect(cx - w / 2, base - th, w, th); g.fillStyle = I.land; g.fill(); g.stroke()
+  if (spire > 0) {
+    g.beginPath(); g.moveTo(cx - w * 0.62, base - th); g.lineTo(cx, base - th - spire); g.lineTo(cx + w * 0.62, base - th); g.closePath()
+    g.fillStyle = roof; g.fill(); g.stroke()
+    g.beginPath(); g.arc(cx, base - th - spire, Math.max(0.6, w * 0.12), 0, Math.PI * 2); g.fillStyle = finial; g.fill()
+  } else {
+    const n = 3, cw = w / (n * 2 - 1)
+    g.beginPath()
+    for (let i = 0; i < n; i++) g.rect(cx - w / 2 + i * cw * 2, base - th - cw, cw, cw)
+    g.fillStyle = I.land; g.fill(); g.stroke()
+  }
+  // a slit window
+  g.beginPath(); g.moveTo(cx, base - th * 0.72); g.lineTo(cx, base - th * 0.5); g.stroke()
+}
+
+function landmark(g: CanvasRenderingContext2D, x: number, y: number, s: number, h: number, tier: number, I: Ink) {
+  const base = y + s * 0.3, gold = '#d9b45a'
+  if (tier === 0) {
+    // the cathedral: twin west towers with spires, a long nave, a crossing spire, a rose window
+    const nave = s * 0.62, x0 = x - s * 0.2
+    hall(g, x0, base, nave, s * 0.2, s * 0.16, I.elder, I)
+    steeple(g, x0 + nave * 0.55, base - s * 0.2, s * 0.08, s * 0.1, s * 0.2, I.elder, I, gold)
+    steeple(g, x - s * 0.38, base, s * 0.12, s * 0.44, s * 0.26, I.elder, I, gold)
+    steeple(g, x - s * 0.24, base, s * 0.12, s * 0.44, s * 0.26, I.elder, I, gold)
+    g.beginPath(); g.arc(x - s * 0.31, base - s * 0.27, s * 0.035, 0, Math.PI * 2); g.fillStyle = gold; g.fill(); g.stroke()
+    g.beginPath(); g.moveTo(x - s * 0.33, base); g.lineTo(x - s * 0.33, base - s * 0.08); g.arc(x - s * 0.31, base - s * 0.08, s * 0.02, Math.PI, 0); g.lineTo(x - s * 0.29, base); g.stroke()
+    return
+  }
+  if (tier === 1) {
+    // the keep: a crenellated square tower between two round turrets with conical roofs
+    const w = s * 0.4, th = s * 0.42
+    for (const side of [-1, 1]) {
+      const tx = x + side * w * 0.62
+      g.beginPath(); g.rect(tx - s * 0.07, base - th * 0.85, s * 0.14, th * 0.85); g.fillStyle = I.land; g.fill(); g.stroke()
+      g.beginPath(); g.moveTo(tx - s * 0.09, base - th * 0.85); g.lineTo(tx, base - th * 0.85 - s * 0.2); g.lineTo(tx + s * 0.09, base - th * 0.85); g.closePath()
+      g.fillStyle = I.elder; g.fill(); g.stroke()
+    }
+    steeple(g, x, base, w, th, 0, I.elder, I, gold)
+    g.beginPath(); g.moveTo(x - s * 0.06, base); g.lineTo(x - s * 0.06, base - s * 0.12); g.arc(x, base - s * 0.12, s * 0.06, Math.PI, 0); g.lineTo(x + s * 0.06, base)
+    g.fillStyle = I.ink; g.globalAlpha *= 0.5; g.fill(); g.globalAlpha /= 0.5; g.stroke()
+    // a banner in the dye
+    g.beginPath(); g.moveTo(x, base - th - s * 0.08); g.lineTo(x, base - th - s * 0.26); g.stroke()
+    g.beginPath(); g.moveTo(x, base - th - s * 0.26); g.lineTo(x + s * 0.12, base - th - s * 0.22); g.lineTo(x, base - th - s * 0.18); g.closePath()
+    g.fillStyle = I.elder; g.fill(); g.stroke()
+    return
+  }
+  if (tier === 2) {
+    // the church: a nave with one west tower and spire
+    hall(g, x - s * 0.12, base, s * 0.46, s * 0.2, s * 0.16, I.elder, I)
+    steeple(g, x - s * 0.24, base, s * 0.14, s * 0.4, s * 0.24, I.elder, I, gold)
+    g.beginPath(); g.arc(x + s * 0.1, base - s * 0.1, s * 0.03, 0, Math.PI * 2); g.stroke()
+    return
+  }
+  // the chapel: a small nave with a bellcote on its gable
+  const w = s * (0.5 + h * 0.08)
+  hall(g, x - w / 2, base, w, s * 0.22, s * 0.2, I.elder, I)
+  g.beginPath(); g.rect(x - w / 2 + w * 0.06, base - s * 0.56, s * 0.1, s * 0.16); g.fillStyle = I.land; g.fill(); g.stroke()
+  g.beginPath(); g.moveTo(x - w / 2 + w * 0.06 - s * 0.02, base - s * 0.56); g.lineTo(x - w / 2 + w * 0.06 + s * 0.05, base - s * 0.66); g.lineTo(x - w / 2 + w * 0.06 + s * 0.12, base - s * 0.56); g.closePath()
+  g.fillStyle = I.elder; g.fill(); g.stroke()
+}
+
+function court(g: CanvasRenderingContext2D, x: number, y: number, s: number, I: Ink) {
+  // the courthouse: a stepped base, four columns, a pediment under a lead roof
+  const base = y + s * 0.3, w = s * 0.7, x0 = x - w / 2, colH = s * 0.3
+  g.beginPath(); g.rect(x0 - s * 0.03, base - s * 0.05, w + s * 0.06, s * 0.05); g.fillStyle = I.land; g.fill(); g.stroke()
+  g.beginPath(); g.rect(x0, base - s * 0.05 - colH, w, colH); g.fillStyle = I.land; g.fill(); g.stroke()
+  g.beginPath()
+  for (let i = 0; i < 4; i++) { const cx = x0 + w * (0.14 + i * 0.24); g.moveTo(cx, base - s * 0.05); g.lineTo(cx, base - s * 0.05 - colH) }
+  g.stroke()
+  g.beginPath(); g.moveTo(x0 - s * 0.05, base - s * 0.05 - colH); g.lineTo(x, base - s * 0.05 - colH - s * 0.2); g.lineTo(x0 + w + s * 0.05, base - s * 0.05 - colH); g.closePath()
+  g.fillStyle = I.lead; g.fill(); g.stroke()
+}
+
+function archive(g: CanvasRenderingContext2D, x: number, y: number, s: number, h: number, I: Ink) {
+  // the archive: a long granary on staddle stones under a hipped brass roof, its doors in a row
+  const w = s * (0.72 + h * 0.08), base = y + s * 0.26, bh = s * 0.2, x0 = x - w / 2
+  g.beginPath()
+  for (const f of [0.12, 0.5, 0.88]) g.rect(x0 + w * f - s * 0.025, base - s * 0.04, s * 0.05, s * 0.04)
+  g.fillStyle = I.ink; g.fill()
+  g.beginPath(); g.rect(x0, base - s * 0.04 - bh, w, bh); g.fillStyle = I.land; g.fill(); g.stroke()
+  g.beginPath()
+  g.moveTo(x0 - s * 0.04, base - s * 0.04 - bh); g.lineTo(x0 + w * 0.2, base - s * 0.04 - bh - s * 0.17)
+  g.lineTo(x0 + w * 0.8, base - s * 0.04 - bh - s * 0.17); g.lineTo(x0 + w + s * 0.04, base - s * 0.04 - bh); g.closePath()
+  g.fillStyle = I.brass; g.fill(); g.stroke()
+  if (s > 12) {
+    g.beginPath()
+    for (const f of [0.25, 0.5, 0.75]) { const dx = x0 + w * f; g.moveTo(dx - s * 0.03, base - s * 0.04); g.lineTo(dx - s * 0.03, base - s * 0.15); g.lineTo(dx + s * 0.03, base - s * 0.15); g.lineTo(dx + s * 0.03, base - s * 0.04) }
+    g.stroke()
+  }
+}
+
+function tower(g: CanvasRenderingContext2D, x: number, y: number, s: number, h: number, I: Ink) {
+  // the watchtower: tall and narrow, a slate cap and a pennant in madder
+  const base = y + s * 0.32, w = s * 0.22, th = s * 0.56
+  g.beginPath(); g.moveTo(x - w * 0.6, base); g.lineTo(x - w / 2, base - th); g.lineTo(x + w / 2, base - th); g.lineTo(x + w * 0.6, base); g.closePath()
+  g.fillStyle = I.land; g.fill(); g.stroke()
+  g.beginPath(); g.rect(x - w * 0.68, base - th - s * 0.06, w * 1.36, s * 0.06); g.fillStyle = I.land; g.fill(); g.stroke()
+  g.beginPath(); g.moveTo(x - w * 0.7, base - th - s * 0.06); g.lineTo(x, base - th - s * 0.24); g.lineTo(x + w * 0.7, base - th - s * 0.06); g.closePath()
+  g.fillStyle = I.stone; g.fill(); g.stroke()
+  const d = h > 0.5 ? 1 : -1
+  g.beginPath(); g.moveTo(x, base - th - s * 0.24); g.lineTo(x, base - th - s * 0.36); g.stroke()
+  g.beginPath(); g.moveTo(x, base - th - s * 0.36); g.lineTo(x + d * s * 0.13, base - th - s * 0.33); g.lineTo(x, base - th - s * 0.3); g.closePath()
+  g.fillStyle = I.roof; g.fill(); g.stroke()
+  g.beginPath(); g.moveTo(x, base - th * 0.7); g.lineTo(x, base - th * 0.5); g.stroke()
 }
 
 function field(g: CanvasRenderingContext2D, x: number, y: number, s: number, h: number, rot: number, I: Ink) {

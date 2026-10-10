@@ -29,7 +29,6 @@ export interface Scene {
   pole: V3                // the visible celestial pole, horizontal frame
   disc: Disc | null       // the limb, while the astrolabe is (partly) out
   dpr: number
-  cssNight: boolean       // the page behind already shows the night: no need to paint it
 }
 
 /** The limb sits a little beyond the far tropic so every graha stays on the plate. */
@@ -39,7 +38,7 @@ export const THRONE = 0.15
 const rimWidth = (R: number) => Math.max(18, Math.min(48, R * RIM))
 
 /** The astrolabe's field and centre so the whole disc, rim and throne sit inside the view. */
-export function astrolabeFit(view: ViewRect, eps: number, zoom = 1): { fov: number; centre: [number, number] } {
+export function astrolabeFit(view: ViewRect, eps: number, zoom = 1): { fov: number; centre: [number, number]; Ro: number } {
   const Ro = Math.max(60, Math.min(view.w / 2, view.h / (2 + THRONE)) * 0.95)
   let R = Ro / (1 + RIM)
   if (R * RIM < 18) R = Ro - 18
@@ -47,7 +46,9 @@ export function astrolabeFit(view: ViewRect, eps: number, zoom = 1): { fov: numb
   const th = (limbCodec(eps) * Math.PI) / 180
   const scale = (R / (2 * Math.tan(th / 2))) * zoom
   const half = Math.min(view.w, view.h) / 2
-  return { fov: fovForScale(half, scale), centre: [view.x + view.w / 2, view.y + view.h / 2 + (Ro * THRONE) / 2] }
+  // the disc's outer radius once zoomed (the limb keeps its width)
+  const Rz = R * zoom
+  return { fov: fovForScale(half, scale), centre: [view.x + view.w / 2, view.y + view.h / 2 + (Ro * THRONE) / 2], Ro: Rz + rimWidth(Rz) }
 }
 
 export function discOf(p: Proj, pole: V3, eps: number): Disc | null {
@@ -71,19 +72,18 @@ function hourAngleOnScreen(sc: Scene, H: number): number {
 /** Background, the plate's engraving and the fixed rings: everything that does not turn. */
 export function drawUnder(ctx: CanvasRenderingContext2D, sc: Scene) {
   const { p, pal, inst, blend } = sc
-  const { w, h } = p
-  // the night itself: warm, never navy
-  // (in the dome the page behind the canvas is already this night, painted by CSS for free;
-  // on the table it is painted here, in the disc only once the astrolabe is fully out)
-  if (!sc.cssNight) {
-    const g = ctx.createRadialGradient(p.cx, p.cy, 0, p.cx, p.cy, Math.max(w, h) * 0.8)
-    g.addColorStop(0, '#1e1915')
-    g.addColorStop(0.6, pal.sky)
+  // the plate's night (warm, never navy), inside the disc only: around it lies space (a canvas behind), and in the
+  // dome the page itself is the night
+  if (sc.disc && sc.reteA > 0.01) {
+    const d = sc.disc
+    const g = ctx.createRadialGradient(d.x - d.R * 0.2, d.y - d.R * 0.25, 0, d.x, d.y, d.R)
+    g.addColorStop(0, '#221c17')
+    g.addColorStop(0.65, pal.sky)
     g.addColorStop(1, pal.skyDeep)
+    ctx.globalAlpha = Math.min(1, sc.reteA)
     ctx.fillStyle = g
-    if (sc.reteA >= 1 && sc.disc) {
-      ctx.beginPath(); ctx.arc(sc.disc.x, sc.disc.y, sc.disc.Ro, 0, Math.PI * 2); ctx.fill()
-    } else ctx.fillRect(0, 0, w, h)
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.R + 2, 0, Math.PI * 2); ctx.fill()
+    ctx.globalAlpha = 1
   }
   if (inst < 0.01) return
 
@@ -152,16 +152,6 @@ export function drawUnder(ctx: CanvasRenderingContext2D, sc: Scene) {
   ctx.strokeStyle = rgba(pal.madder, 0.85 * engr)
   strokeSphere(ctx, p, circlePoints(zen, 90, 240), -0.995)
   ctx.restore()
-
-  // the rete's outer ring, on the far tropic: it turns, but a circle about the pole looks the same
-  // at every turn, so it can live on the still layer
-  if (d && engr > 0.02) {
-    const f = circleFit(p, sc.pole, 90 + eps)
-    if (f) {
-      const bw = Math.max(3, d.rw * 0.2)
-      metalAnnulus(ctx, pal, f.x, f.y, f.r, f.r + bw, engr * 0.95, true)
-    }
-  }
 
   // the armillary: meridian, horizon and equator as rings of metal
   if (arm > 0.02) {
@@ -263,25 +253,25 @@ export function brushed(ctx: CanvasRenderingContext2D, pal: Palette, x: number, 
  * Outside the disc the layer is cut away, so the table -- the page -- shows around the instrument.
  */
 export function drawOver(ctx: CanvasRenderingContext2D, sc: Scene) {
-  const { p, reteA } = sc
-  drawGround(ctx, sc)
+  const { reteA } = sc
   const d = sc.disc
+  drawCardinals(ctx, sc)
   if (d && reteA > 0.01) {
-    // cut the night away outside the rim, as far as the instrument is out
-    eraseOutside(ctx, d, reteA, p)
-    // the disc's shadow on the table
-    const sh = ctx.createRadialGradient(d.x + d.Ro * 0.02, d.y + d.Ro * 0.035, d.Ro * 0.97, d.x + d.Ro * 0.02, d.y + d.Ro * 0.035, d.Ro * 1.09)
-    sh.addColorStop(0, `rgba(10, 6, 2, ${0.45 * reteA})`)
-    sh.addColorStop(1, 'rgba(10, 6, 2, 0)')
-    ctx.fillStyle = sh
-    ctx.beginPath()
-    ctx.rect(0, 0, p.w, p.h)
-    ctx.arc(d.x, d.y, d.Ro - 1, 0, Math.PI * 2, true)
-    ctx.fill('evenodd')
+    // nothing of the plate's lettering runs out past the rim
+    eraseOutside(ctx, d, reteA, sc.p)
     drawThrone(ctx, sc, reteA)
     drawLimb(ctx, sc, reteA)
   }
-  drawCardinals(ctx, sc)
+}
+
+/** The rete's outer ring, on the far tropic (a circle about the pole: any turn looks the same). */
+export function drawReteRing(ctx: CanvasRenderingContext2D, sc: Scene) {
+  const d = sc.disc
+  if (!d || sc.reteA <= 0.02) return
+  const f = circleFit(sc.p, sc.pole, 90 + sc.sky.obliquity)
+  if (!f) return
+  const bw = Math.max(3, d.rw * 0.2)
+  metalAnnulus(ctx, sc.pal, f.x, f.y, f.r, f.r + bw, sc.reteA * 0.95, true)
 }
 
 export function eraseOutside(ctx: CanvasRenderingContext2D, d: Disc, a: number, p: Proj) {
@@ -295,7 +285,8 @@ export function eraseOutside(ctx: CanvasRenderingContext2D, d: Disc, a: number, 
   ctx.restore()
 }
 
-function drawGround(ctx: CanvasRenderingContext2D, sc: Scene) {
+/** The ground below the horizon, veiled; and in the dome a warm haze along the horizon. */
+export function drawGround(ctx: CanvasRenderingContext2D, sc: Scene) {
   const { p, blend, pal } = sc
   const zen: V3 = [0, 0, 1]
   const alpha = 0.5 * (1 - blend) + 0.26 * blend
@@ -442,6 +433,19 @@ function drawLimb(ctx: CanvasRenderingContext2D, sc: Scene, a: number) {
   ctx.restore()
 }
 
+/** The throne's outline, in a frame where it rises along -y from the rim at y = -Ro. */
+export function thronePath(Ro: number): Path2D {
+  const th = Ro * THRONE, wide = Ro * 0.2
+  const path = new Path2D()
+  path.moveTo(-wide, -Ro + th * 0.25)
+  path.bezierCurveTo(-wide * 0.9, -Ro - th * 0.25, -wide * 0.55, -Ro - th * 0.2, -wide * 0.42, -Ro - th * 0.45)
+  path.bezierCurveTo(-wide * 0.3, -Ro - th * 0.7, -wide * 0.12, -Ro - th * 0.6, 0, -Ro - th * 0.82)
+  path.bezierCurveTo(wide * 0.12, -Ro - th * 0.6, wide * 0.3, -Ro - th * 0.7, wide * 0.42, -Ro - th * 0.45)
+  path.bezierCurveTo(wide * 0.55, -Ro - th * 0.2, wide * 0.9, -Ro - th * 0.25, wide, -Ro + th * 0.25)
+  path.closePath()
+  return path
+}
+
 /** The throne (kursi) at the noon line, with its shackle and ring. */
 function drawThrone(ctx: CanvasRenderingContext2D, sc: Scene, a: number) {
   const d = sc.disc!
@@ -455,13 +459,7 @@ function drawThrone(ctx: CanvasRenderingContext2D, sc: Scene, a: number) {
   // in this frame the throne rises along -y from the rim at y = -Ro
   const Ro = d.Ro
   const wide = Ro * 0.2
-  const path = new Path2D()
-  path.moveTo(-wide, -Ro + th * 0.25)
-  path.bezierCurveTo(-wide * 0.9, -Ro - th * 0.25, -wide * 0.55, -Ro - th * 0.2, -wide * 0.42, -Ro - th * 0.45)
-  path.bezierCurveTo(-wide * 0.3, -Ro - th * 0.7, -wide * 0.12, -Ro - th * 0.6, 0, -Ro - th * 0.82)
-  path.bezierCurveTo(wide * 0.12, -Ro - th * 0.6, wide * 0.3, -Ro - th * 0.7, wide * 0.42, -Ro - th * 0.45)
-  path.bezierCurveTo(wide * 0.55, -Ro - th * 0.2, wide * 0.9, -Ro - th * 0.25, wide, -Ro + th * 0.25)
-  path.closePath()
+  const path = thronePath(Ro)
   // shadow on the table, then the metal
   ctx.save()
   ctx.translate(Ro * 0.012, Ro * 0.02)
@@ -499,7 +497,7 @@ function drawThrone(ctx: CanvasRenderingContext2D, sc: Scene, a: number) {
 // ------------------------------------------------------------------ the rule
 
 /** The rule, counterchanged so one fiducial edge runs through the pin, laid through the Sun. */
-export function drawRule(ctx: CanvasRenderingContext2D, sc: Scene, sun: V3) {
+export function drawRule(ctx: CanvasRenderingContext2D, sc: Scene, sun: V3, part: 'body' | 'shadow' | 'both' = 'both') {
   const d = sc.disc
   if (!d || sc.reteA < 0.02) return
   const s = project(sc.p, sun, -0.999)
@@ -525,14 +523,18 @@ export function drawRule(ctx: CanvasRenderingContext2D, sc: Scene, sun: V3) {
   ctx.globalAlpha = sc.reteA
   ctx.translate(d.x, d.y)
   ctx.rotate(ang)
-  ctx.save()
-  // a cast shadow, offset away from the lamp
-  ctx.rotate(-ang)
-  ctx.translate(2.2, 3.2)
-  ctx.rotate(ang)
-  ctx.fillStyle = 'rgba(8, 5, 2, 0.4)'
-  ctx.fill(shape)
-  ctx.restore()
+  if (part !== 'body') {
+    // a cast shadow, offset away from the lamp (in depth it falls on the rete, below the rule)
+    ctx.save()
+    ctx.rotate(-ang)
+    ctx.translate(2.2, 3.2)
+    ctx.rotate(ang)
+    ctx.fillStyle = 'rgba(8, 5, 2, 0.4)'
+    ctx.fill(shape)
+    ctx.beginPath(); ctx.arc(0, 0, wb * 2.4, 0, Math.PI * 2); ctx.fill()
+    ctx.restore()
+    if (part === 'shadow') { ctx.restore(); return }
+  }
   const lg = ctx.createLinearGradient(0, -wb, 0, wb)
   lg.addColorStop(0, pal.metal[0]); lg.addColorStop(0.5, pal.metal[2]); lg.addColorStop(1, pal.metal[1])
   ctx.fillStyle = lg

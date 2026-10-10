@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@/core/store'
 import { fieldsPrefs, type FieldsNames, type FieldsPrefs } from './prefs'
-import { drawGlyph, mountain, tree, KIND_INFO, KIND_COUNT, type Kind } from './glyphs'
+import { drawGlyph, mountain, tree, KIND_INFO, KIND_COUNT, Kind } from './glyphs'
 import { inkFrom } from './mapdraw'
 
 const NAMES: Array<[FieldsNames, string]> = [['all', 'All'], ['places', 'Places'], ['none', 'None']]
@@ -51,8 +51,11 @@ function KeyMark({ draw, C, stone }: { draw: (g: CanvasRenderingContext2D, I: Re
   return <canvas ref={ref} style={{ width: 26, height: 22 }} aria-hidden="true" />
 }
 
-const KIND_DRAW = Array.from({ length: KIND_COUNT }, (_, k) =>
-  (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => drawGlyph(g, k as Kind, 13, 11, 18, 0.4, 0.2, I))
+const KIND_DRAW = Array.from({ length: KIND_COUNT }, (_, k) => k === Kind.Landmark
+  ? (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => drawGlyph(g, Kind.Landmark, 14, 12, 15, 0.4, 0.2, I, 1)
+  : (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => drawGlyph(g, k as Kind, 13, 12, 18, 0.4, 0.2, I))
+/** Buildings first, landmark to watchtower, then the ground and its odds and ends. */
+const KEY_ORDER = [Kind.Landmark, Kind.House, Kind.Archive, Kind.Court, Kind.Forge, Kind.Mill, Kind.Tower, Kind.Field, Kind.Stone, Kind.Tree, Kind.Post, Kind.Cairn]
 const drawRange = (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => { mountain(g, 9, 18, 7, 0.3, I, 1); mountain(g, 17, 19, 6, 0.7, I, 1) }
 const drawWood = (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => { tree(g, 8, 10, 4.5, I); tree(g, 17, 9, 4, I); tree(g, 13, 14, 4.5, I) }
 const drawRiver = (g: CanvasRenderingContext2D, I: ReturnType<typeof inkFrom>) => {
@@ -102,8 +105,8 @@ export function FieldsControls({ C, stone }: { C: Record<string, string>; stone:
             <div className="fields-key">
               <div className="faint" style={{ fontSize: 11.5, margin: '2px 0 4px' }}>The key: one mark is one file</div>
               <ul>
-                {KIND_INFO.map((k, i) => (
-                  <li key={k.name}><KeyMark draw={KIND_DRAW[i]} C={C} stone={stone} /><span><b>{k.name}</b> {k.means}</span></li>
+                {KEY_ORDER.map((i) => (
+                  <li key={KIND_INFO[i].name}><KeyMark draw={KIND_DRAW[i]} C={C} stone={stone} /><span><b>{KIND_INFO[i].name}</b> {KIND_INFO[i].means}</span></li>
                 ))}
                 <li><KeyMark draw={drawRiver} C={C} stone={stone} /><span><b>river</b> a run of dated files, flowing by time</span></li>
                 <li><KeyMark draw={drawRange} C={C} stone={stone} /><span><b>mountains</b> where folders nest deep and wide</span></li>

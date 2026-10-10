@@ -12,14 +12,15 @@
 
 import type { CanvasApi } from '@/ui/useCanvas'
 import { journeyById } from '@/grain/quests'
+import { prefersStill } from '@/core/settings'
 import type { Plot, World } from './layout'
 import {
   K, OX, OY, W, H, board, fogPattern, beginFrame, drawSeeds, drawPulse, drawRoad, regionTitle, type Geo, type Scene,
 } from './draw'
 import { textWidth, fontAt } from './labels'
 import { type Atlas, CELL, coastReach, zoneClear } from './atlas'
-import { Kind, type Ink, drawGlyph, kindTint, mountain, hill, tree, tuft, KIND_INFO } from './glyphs'
-import { TileCache, TILE } from './tiles'
+import { Kind, type Ink, drawGlyph, kindTint, mountain, hill, tree, tuft, KIND_INFO, KIND_COUNT } from './glyphs'
+import { TileCache, TILE, type TileFrame } from './tiles'
 import { Sprites, stepOf } from './sprites'
 import type { FieldsPrefs } from './prefs'
 
@@ -37,6 +38,7 @@ export function inkFrom(C: Record<string, string>, stone: boolean): Ink {
   return {
     ink: C['--ink'], land: stone ? C['--surface-2'] : C['--surface'], sea: C['--page'],
     roof: C['--madder'], roof2: C['--annatto'], wheat: C['--weld'], green: C['--sage'],
+    elder: C['--elder'], brass: C['--brass'], lead: C['--ink-2'],
     stone: C['--ink-3'], dim: C['--ink-3'], shade: stone ? C['--ink'] : C['--page'], night: !stone,
   }
 }
@@ -72,8 +74,9 @@ export function pickGlyph(at: Atlas, wx: number, wy: number, k: number): number 
   if (CELL * k < DOTS_BELOW) return -1
   const reach = Math.max(CELL * 0.62, 7 / k)
   let best = -1, bd = reach
-  at.glyphs.each(wx - reach, wy - reach, wx + reach, wy + reach, (i) => {
-    const d = Math.hypot(at.gx[i] - wx, at.gy[i] - wy)
+  const far = reach * 2.4
+  at.glyphs.each(wx - far, wy - far, wx + far, wy + far, (i) => {
+    const d = Math.hypot(at.gx[i] - wx, at.gy[i] - wy) / at.scale[i]
     if (d < bd) { bd = d; best = i }
   })
   return best
@@ -334,12 +337,12 @@ export class MapRenderer {
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
     const X = (x: number) => (x - x0) * px, Y = (y: number) => (y - y0) * px
     const items: Item[] = []
-    const m = CELL * 1.4
+    const m = CELL * 2
 
     if (cellPx < DOTS_BELOW) {
       // land use: one dot per file, in its tint
       const d = Math.max(0.9, cellPx * 0.92)
-      const byKind: number[][] = [[], [], [], [], [], [], [], []]
+      const byKind: number[][] = Array.from({ length: KIND_COUNT }, () => [])
       at.glyphs.each(x0 - m, y0 - m, x1 + m, y1 + m, (i) => byKind[at.kind[i]].push(i))
       byKind.forEach((list, k) => {
         if (!list.length) return
@@ -350,7 +353,7 @@ export class MapRenderer {
       g.globalAlpha = 1
     } else {
       at.glyphs.each(x0 - m, y0 - m, x1 + m, y1 + m, (i) => {
-        items.push({ y: Y(at.gy[i]), x: X(at.gx[i]), t: 100 + at.kind[i], m: 0, h: at.seed[i], r: at.rot[i] })
+        items.push({ y: Y(at.gy[i]), x: X(at.gx[i]), t: 100 + at.kind[i], m: i, h: at.seed[i], r: at.rot[i] })
       })
     }
 
@@ -409,7 +412,8 @@ export class MapRenderer {
       g.globalAlpha = 1
       if (it.t >= 100) {
         const k = (it.t - 100) as Kind
-        if (cellPx < SIMPLE_BELOW) { g.lineWidth = 0.9; g.strokeStyle = I.ink; simple(g, k, it.x, it.y, cellPx, it.h, I); continue }
+        const sc = at.scale[it.m]
+        if (cellPx < SIMPLE_BELOW) { g.lineWidth = 0.9; g.strokeStyle = I.ink; simple(g, k, it.x, it.y, cellPx * sc, it.h, I); continue }
         if (k === Kind.Field) {
           // a parcel, drawn square and turned to its settlement's street grid
           const v = Math.floor(it.h * 8), hq = (v + 0.5) / 8
@@ -423,6 +427,15 @@ export class MapRenderer {
         }
         if (yards) { g.lineWidth = 0.9; g.strokeStyle = I.ink; yard(g, it.x, it.y, cellPx, it.r, it.h, I) }
         const v = Math.floor(it.h * 4), hq = (v + 0.5) / 4
+        if (sc !== 1) {
+          // a landmark: its own size step, and its tier's building
+          const tr = at.tier[it.m]
+          const [lb, lq] = stepOf(gs * sc)
+          const sp = SP.get(`L${tr}:${lb}:${v}`, lq, lq * 1.3 + 8, lq * 1.3 + 8, lq * 0.65 + 4, lq * 0.95 + 4,
+            (q) => { ink(q); drawGlyph(q, k, 0, 0, lq, hq, 0, I, tr) })
+          Sprites.put(g, sp, it.x, it.y, gs * sc)
+          continue
+        }
         const sp = SP.get(`g${k}:${gb}:${v}`, gq, gq * 1.6 + 6, gq * 1.6 + 6, gq * 0.8 + 3, gq * 0.85 + 3,
           (q) => { ink(q); drawGlyph(q, k, 0, 0, gq, hq, 0, I) })
         Sprites.put(g, sp, it.x, it.y, gs)
@@ -465,8 +478,9 @@ export class MapRenderer {
     beginFrame(ctx, a, world, sc)
     const C = sc.C, I = this.I
     if (prefs.sea) this.rhumbs(ctx, at, C)
-    const missing = this.tiles.draw(ctx, a.camera.current, a.size.current, at.bounds, this.renderTile, 6)
-    if (missing) a.redraw()
+    if (this.tiles.draw(ctx, a.camera.current, a.size.current, at.bounds, this.renderTile, 6, prefersStill())) a.redraw()
+    const dbg = (globalThis as { __fieldsTiles?: TileFrame[] }).__fieldsTiles
+    this.tiles.log = Array.isArray(dbg) ? dbg : null
     if (prefs.sea) {
       this.rose(ctx, at, world, C, I)
       this.cartouche(ctx, at, world, I, stats)
@@ -487,7 +501,7 @@ export class MapRenderer {
     if (hoverGlyph >= 0) {
       const x = at.gx[hoverGlyph] * K + OX, y = at.gy[hoverGlyph] * K + OY
       const cp = CELL * K
-      const r = Math.max(5, (at.kind[hoverGlyph] === Kind.Field ? cp : cp <= GLYPH_MAX ? cp : GLYPH_MAX + (cp - GLYPH_MAX) * 0.25) * 0.62)
+      const r = Math.max(5, (at.kind[hoverGlyph] === Kind.Field ? cp : cp <= GLYPH_MAX ? cp : GLYPH_MAX + (cp - GLYPH_MAX) * 0.25) * 0.62 * at.scale[hoverGlyph])
       ctx.save()
       ctx.strokeStyle = C['--gold']
       ctx.lineWidth = 1.8
@@ -722,7 +736,7 @@ export class MapRenderer {
       const short = name.length > 30 ? name.slice(0, 29) + '…' : name
       const tw = textWidth(ctx, gface, short, gfaceSize)
       const hot = i === hoverGlyph
-      const gw = at.kind[i] === Kind.Field ? cellPx : gs
+      const gw = (at.kind[i] === Kind.Field ? cellPx : gs) * at.scale[i]
       for (const [lx, ly] of [[x + gw * 0.45 + 3, y + gfaceSize * 0.35], [x - gw * 0.45 - 3 - tw, y + gfaceSize * 0.35], [x - tw / 2, y + gw * 0.5 + gfaceSize]] as const) {
         // a little air around each name, so a crowded street is named sparingly
         if (!board.place(lx - 6, ly - gfaceSize * 1.2, lx + tw + 6, ly + gfaceSize * 0.6)) continue
