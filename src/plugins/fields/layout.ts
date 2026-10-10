@@ -10,7 +10,7 @@ export const GOLDEN = Math.PI * (3 - Math.sqrt(5))
 const GRAIN = 5               // world radius per file in a leaf plot
 const PAD = 1.12
 
-export interface Grain { path: string; x: number; y: number; a: number }
+export interface Grain { path: string; name: string; x: number; y: number; a: number }
 
 export interface Plot {
   path: string
@@ -109,7 +109,7 @@ function grainsFor(files: string[], R: number): Grain[] {
   return files.map((p, i) => {
     const rad = R * 0.86 * Math.sqrt((i + 0.5) / n)
     const a = i * GOLDEN
-    return { path: p, x: Math.cos(a) * rad, y: Math.sin(a) * rad, a: a + Math.PI / 2 }
+    return { path: p, name: p.slice(p.lastIndexOf('/') + 1).slice(0, 34), x: Math.cos(a) * rad, y: Math.sin(a) * rad, a: a + Math.PI / 2 }
   })
 }
 

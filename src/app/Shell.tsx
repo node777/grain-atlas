@@ -10,6 +10,8 @@ import { SettingsDrawer } from './SettingsDrawer'
 import { Folio } from './Folio'
 import { Toasts } from '@/ui/Toast'
 import { Mark } from '@/ui/Mark'
+import { Dock } from './Dock'
+import { VersionBadge, VersionsPanel } from './Versions'
 
 let lastBackground = 'fields'
 
@@ -18,6 +20,7 @@ export function Shell() {
   const s = useStore(settings)
   const r = useStore(repo, (x) => ({ phase: x.phase, source: x.source, note: x.note, error: x.error }))
   const [drawer, setDrawer] = useState(false)
+  const [versions, setVersions] = useState(false)
 
   useEffect(() => applyTheme(s), [s.mode, s.element, s.motion])
   useEffect(() => {
@@ -49,6 +52,7 @@ export function Shell() {
         {r.phase === 'loading' && <span className="faint">reading the tree…</span>}
         {r.error && <span style={{ color: 'var(--red)' }} title={r.error}>[ tree unreachable ]</span>}
         {r.note && <span className="faint" title={r.note}>[ {r.source} ]</span>}
+        <VersionBadge onOpen={() => setVersions(!versions)} />
         <NowChip />
         <button
           className="icon-btn"
@@ -65,6 +69,13 @@ export function Shell() {
         {openPath !== undefined && openPath !== '' && <Folio path={openPath} route={route} />}
       </main>
       {drawer && <SettingsDrawer onClose={() => setDrawer(false)} />}
+      {versions && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 44 }} onClick={() => setVersions(false)} />
+          <div className="popover panel linen-fine" role="dialog" aria-label="Versions"><VersionsPanel onClose={() => setVersions(false)} /></div>
+        </>
+      )}
+      <Dock />
       <Toasts />
     </div>
   )

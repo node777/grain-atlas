@@ -9,7 +9,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
     "data:stars": "node scripts/build-stars.mjs",
-    "data:almanac": "node scripts/build-almanac.mjs"
+    "data:almanac": "node scripts/build-almanac.mjs",
+    "bridge": "node scripts/bridge.mjs"
   },
   "repository": {
     "type": "git",
@@ -22,6 +23,7 @@
   },
   "homepage": "https://github.com/node777/grain-atlas#readme",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
     "@fontsource/public-sans": "^5.1.1",
     "@fontsource/source-code-pro": "^5.1.1",
     "@fontsource/tiro-devanagari-sanskrit": "^5.1.0",

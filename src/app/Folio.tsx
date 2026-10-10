@@ -15,6 +15,20 @@ import { Stamp } from '@/ui/Stamp'
 import { roomWord } from '@/grain/header'
 import { toast } from '@/ui/Toast'
 import { runLine } from '@/plugins/bench/commands'
+import { Character } from '@/voices/Character'
+import { lookForName, voiceByName, activeVoice } from '@/voices/voices'
+
+/** The voice a page is written in, with its face; click to wake that voice in the dock. */
+function VoiceTag({ name }: { name: string }) {
+  const first = name.split(/[\s,(]/)[0]
+  const known = voiceByName(first)
+  return (
+    <button className="voice-tag" title={known ? `${known.name}: ${known.role}. Wake ${known.name}.` : `written in the voice ${name}`} onClick={() => known && activeVoice.set({ id: known.id })}>
+      <Character look={lookForName(first)} size={30} title={first} />
+      <span className="sans" style={{ fontSize: 13 }}>{name.length > 40 ? first : name}</span>
+    </button>
+  )
+}
 
 export function Folio({ path, route }: { path: string; route: Route }) {
   const r = useStore(repo, (s) => ({ entries: s.entries, version: s.version, owner: s.owner, repo: s.repo, ref: s.ref, backlinks: s.backlinks, phase: s.phase }))
@@ -142,7 +156,7 @@ function FilePage({ entry, embedded }: { entry: Entry; embedded?: boolean }) {
               ? <span className="sans faint" style={{ fontSize: 12 }}>{birth.source === 'filename' ? 'born' : `stamped (${entry.meta?.stampField ?? 'header'})`}<br /><Stamp stamp={birth} from={entry.path} /></span>
               : <span className="sans faint" style={{ fontSize: 12 }}>sown with the seed<br /><Stamp stamp={sowing} from={entry.path} /></span>}
             {header?.status && <span className="room-tag" data-room={header.status.room} title={header.status.text}>{roomWord(header.status.room, header.status.text)}</span>}
-            {header?.fields['Voice'] && <span className="sans faint" style={{ fontSize: 13 }}>voice {header.fields['Voice'].replace(/`/g, '')}</span>}
+            {header?.fields['Voice'] && <VoiceTag name={header.fields['Voice'].replace(/`/g, '')} />}
             <span className="mono faint" style={{ fontSize: 12 }}>{formatSize(entry.size)}</span>
           </div>
           {run && (

@@ -1,14 +1,33 @@
 .fields { position: absolute; inset: 0; }
 .fields-canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 .fields-canvas:active { cursor: grabbing; }
+.fields-canvas:focus { outline: none; }
+.fields-canvas:focus-visible { outline: 1.5px solid var(--brass-dim); outline-offset: -6px; border-radius: var(--r3); }
 .fields-wait { position: absolute; inset: 0; display: grid; place-items: center; font-style: italic; color: var(--ink-2); pointer-events: none; }
 .fields-tip { position: absolute; pointer-events: none; padding: 8px 12px; max-width: 360px; font-size: 14px; z-index: 5; }
+.fields-tip-mist { margin-top: 4px; font-size: 11.5px; color: var(--ink-2); font-style: italic; font-family: var(--serif); }
+
+/* the minimap sits top-right, clear of the inspector below */
+.fields-mini { position: absolute; right: 16px; top: 16px; padding: 6px; z-index: 6; line-height: 0; border-radius: var(--r3); }
+.fields-mini canvas { display: block; cursor: crosshair; touch-action: none; border-radius: var(--r2); }
+
 .fields-inspector { position: absolute; right: 16px; bottom: 16px; width: min(360px, calc(100% - 32px)); padding: 14px 16px; z-index: 6; }
-.fields-journey { position: absolute; right: 16px; top: 16px; width: min(320px, calc(100% - 32px)); padding: 12px 16px; z-index: 6; max-height: 60%; overflow: auto; }
+.fields-journey { position: absolute; right: 16px; top: 172px; width: min(320px, calc(100% - 32px)); padding: 12px 16px; z-index: 6; max-height: calc(100% - 420px); min-height: 120px; overflow: auto; }
 .fields-journey ol { margin: 8px 0; padding-left: 22px; font-size: 14.5px; }
 .fields-journey li { margin: 4px 0; }
 .fields-journey li a { color: var(--ink); text-decoration: none; }
 .fields-journey li.done a { color: var(--gold); }
 .fields-journey li.done::marker { color: var(--gold); }
-.fields-legend { position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; font-size: 12px; pointer-events: none; }
-@media (max-width: 720px) { .fields-legend { display: none; } }
+
+.fields-legend {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px; font-size: 12px; pointer-events: none;
+  display: flex; align-items: baseline; gap: 14px; white-space: nowrap;
+  padding: 3px 12px; border-radius: var(--r2); background: color-mix(in srgb, var(--page) 78%, transparent);
+}
+.fields-found { display: inline-flex; align-items: center; gap: 6px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.fields-found svg { fill: currentColor; transform: rotate(18deg); }
+:root[data-mode='stone'] .fields-found { color: var(--brass-dim); }
+@media (max-width: 720px) {
+  .fields-legend .faint { display: none; }
+  .fields-mini { transform: scale(0.8); transform-origin: top right; }
+}

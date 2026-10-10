@@ -6,8 +6,11 @@
 //   3. per-file headers fill in lazily as files are opened (raw host, outside the API quota)
 
 import { createStore } from '@/core/store'
-import { settings } from '@/core/settings'
-import { headSha, treeAt, commitInfo, fileText, type GitTreeEntry } from '@/github/client'
+import { headSha, treeAt, commitInfo, fileText, rawUrl, type GitTreeEntry } from '@/github/client'
+import { sources, refKey, type SourceRef } from '@/sources'
+import { restoreLocalGrain, walk, readLocal, writeLocal, localHandle } from '@/sources/local'
+import { bridgeList, bridgeRead, bridgeWrite } from '@/sources/bridge'
+import { readVersion, type VersionInfo } from '@/sources/versions'
 import { parseHeader, extractLinks, benediction, type TwoRoom } from './header'
 import { parseStamp, stampFromPath, type Stamp } from './stamps'
 import { FIELD_ROOMS } from './rooms'
@@ -40,13 +43,18 @@ export interface Entry {
 }
 
 export interface RepoState {
-  phase: 'idle' | 'loading' | 'ready' | 'error'
-  source: 'snapshot' | 'live' | 'none'
+  phase: 'idle' | 'loading' | 'ready' | 'error' | 'needs-permission'
+  source: 'snapshot' | 'live' | 'local' | 'bridge' | 'none'
+  origin: SourceRef
+  writable: boolean
+  versionInfo?: VersionInfo
+  progress?: number
   note?: string
   owner: string
   repo: string
   ref: string             // sha when known, else branch
   committed?: string
+  subject?: string         // the head commit's subject, when known
   entries: Map<string, Entry>
   backlinks: Map<string, string[]>
   version: number         // bumps when entries change (for memoized views)
@@ -54,14 +62,15 @@ export interface RepoState {
 }
 
 export const repo = createStore<RepoState>({
-  phase: 'idle', source: 'none', owner: '', repo: '', ref: '', entries: new Map(), backlinks: new Map(), version: 0,
+  phase: 'idle', source: 'none', origin: sources.get().active, writable: false,
+  owner: '', repo: '', ref: '', entries: new Map(), backlinks: new Map(), version: 0,
 })
 
 interface AlmanacEntry {
   p: string; s: number; b: string; l?: 1; m?: 1; t?: string; st?: string; sf?: string; r?: TwoRoom; sx?: string
   v?: string; y?: string; c?: string; w?: string; k?: number[]; f?: string[]; bn?: string
 }
-interface Almanac { format: string; repo: string; branch: string; sha: string; committed: string; entries: AlmanacEntry[] }
+interface Almanac { format: string; repo: string; branch: string; sha: string; committed: string; subject?: string; entries: AlmanacEntry[] }
 
 function buildEntries(files: Array<{ path: string; size: number; blob?: string; kind: Entry['kind']; meta?: Meta }>): Map<string, Entry> {
   const map = new Map<string, Entry>()
@@ -139,9 +148,31 @@ function fromTree(tree: GitTreeEntry[], prior?: Map<string, Entry>): Map<string,
   }))
 }
 
+let loadToken = 0
+
 export async function loadRepo(): Promise<void> {
-  const { owner, repo: name, branch } = settings.get()
-  repo.set({ phase: 'loading', owner, repo: name, ref: branch, error: undefined })
+  const origin = sources.get().active
+  const token = ++loadToken
+  const stale = () => token !== loadToken
+  repo.set({
+    phase: 'loading', origin, writable: origin.kind !== 'github', error: undefined, note: undefined, versionInfo: undefined,
+    owner: origin.kind === 'github' ? origin.owner : '', repo: origin.kind === 'github' ? origin.repo : '',
+    ref: origin.kind === 'github' ? origin.branch : '', entries: new Map(), backlinks: new Map(), progress: undefined,
+  })
+  try {
+    if (origin.kind === 'github') await loadGithub(origin, stale)
+    else if (origin.kind === 'local') await loadLocal(stale)
+    else await loadBridge(stale)
+  } catch (e) {
+    if (!stale() && repo.get().phase !== 'ready') repo.set({ phase: 'error', error: (e as Error).message })
+  }
+  if (!stale() && repo.get().phase === 'ready') {
+    readVersion(origin).then((v) => { if (!stale()) repo.set({ versionInfo: v }) }).catch(() => undefined)
+  }
+}
+
+async function loadGithub(origin: Extract<SourceRef, { kind: 'github' }>, stale: () => boolean): Promise<void> {
+  const { owner, repo: name, branch } = origin
   let entries: Map<string, Entry> | undefined
   let snapshotSha: string | undefined
   let committed: string | undefined
@@ -150,11 +181,11 @@ export async function loadRepo(): Promise<void> {
     const res = await fetch(`${import.meta.env.BASE_URL}data/almanac.json`, { cache: 'no-cache' })
     if (res.ok) {
       const a = (await res.json()) as Almanac
-      if (a.repo.toLowerCase() === `${owner}/${name}`.toLowerCase()) {
+      if (a.repo.toLowerCase() === `${owner}/${name}`.toLowerCase() && a.branch === branch && !stale()) {
         entries = fromAlmanac(a)
         snapshotSha = a.sha
         committed = a.committed
-        repo.set({ phase: 'ready', source: 'snapshot', ref: a.sha, committed, entries, backlinks: backlinksOf(entries), version: repo.get().version + 1 })
+        repo.set({ phase: 'ready', source: 'snapshot', ref: a.sha, committed, subject: a.subject, entries, backlinks: backlinksOf(entries), version: repo.get().version + 1 })
       }
     }
   } catch { /* no snapshot shipped; go live */ }
@@ -165,23 +196,57 @@ export async function loadRepo(): Promise<void> {
       const tree = await treeAt(owner, name, sha)
       entries = fromTree(tree, entries)
       const info = await commitInfo(owner, name, sha).catch(() => undefined)
+      if (stale()) return
       repo.set({
-        phase: 'ready', source: 'live', ref: sha, committed: info?.date ?? committed, entries,
+        phase: 'ready', source: 'live', ref: sha, committed: info?.date ?? committed, subject: info?.message.split('\n')[0], entries,
         backlinks: backlinksOf(entries), version: repo.get().version + 1,
         note: snapshotSha ? 'grain has grown since the snapshot; headers fill in as you read' : undefined,
       })
     }
   } catch (e) {
+    if (stale()) return
     if (!entries) repo.set({ phase: 'error', error: (e as Error).message })
     else repo.set({ note: 'Reading from the snapshot; GitHub is resting for now.' })
   }
+}
+
+async function loadLocal(stale: () => boolean): Promise<void> {
+  const h = await restoreLocalGrain(false)
+  if (!h) {
+    repo.set({ phase: 'needs-permission', note: 'Reopen your grain folder to let the atlas read it again.' })
+    return
+  }
+  const files = await walk(h, (n) => { if (!stale()) repo.set({ progress: n }) })
+  if (stale()) return
+  const entries = buildEntries(files.map((f) => ({ path: f.path, size: f.size, kind: 'file' as const })))
+  repo.set({ phase: 'ready', source: 'local', ref: 'working tree', entries, backlinks: new Map(), version: repo.get().version + 1, committed: new Date().toISOString() })
+}
+
+async function loadBridge(stale: () => boolean): Promise<void> {
+  const files = await bridgeList()
+  if (stale()) return
+  const entries = buildEntries(files.map((f) => ({ path: f.path, size: f.size, kind: 'file' as const })))
+  repo.set({ phase: 'ready', source: 'bridge', ref: 'working tree', entries, backlinks: new Map(), version: repo.get().version + 1, committed: new Date().toISOString() })
+}
+
+/** Raw text of a file from the active version, without folding anything into the map. */
+async function rawText(path: string): Promise<string> {
+  const s = repo.get()
+  const o = s.origin
+  if (o.kind === 'local') {
+    const h = localHandle() ?? (await restoreLocalGrain(true))
+    if (!h) throw new Error('The grain folder needs permission again.')
+    return (await readLocal(h, path)).text()
+  }
+  if (o.kind === 'bridge') return bridgeRead(path)
+  return fileText(s.owner, s.repo, s.ref, path, s.entries.get(path)?.blob)
 }
 
 /** Read a file and fold what it says about itself back into the map. */
 export async function readFile(path: string): Promise<string> {
   const s = repo.get()
   const e = s.entries.get(path)
-  const text = await fileText(s.owner, s.repo, s.ref, path, e?.blob)
+  const text = await rawText(path)
   if (e && path.endsWith('.md') && !e.meta?.title) {
     const h = parseHeader(text)
     const links = extractLinks(path, text)
@@ -194,6 +259,65 @@ export async function readFile(path: string): Promise<string> {
     repo.set({ backlinks: backlinksOf(s.entries), version: s.version + 1 })
   }
   return text
+}
+
+export interface Change { path: string; at: number; by: string; bytes: number; created: boolean }
+export const changes = createStore<{ list: Change[] }>({ list: [] }, 'grain-atlas:changes')
+
+/**
+ * Write a file into the active version (a local folder or the bridge checkout). A GitHub
+ * version is read-only here; callers keep a draft instead (see agent drafts).
+ */
+export async function writeFile(path: string, text: string, by = 'you'): Promise<void> {
+  const s = repo.get()
+  const o = s.origin
+  if (o.kind === 'github') throw new Error('This version is read from GitHub and cannot be written. Open your own grain (a local folder or the bridge) to write.')
+  if (o.kind === 'local') {
+    const h = localHandle() ?? (await restoreLocalGrain(true))
+    if (!h) throw new Error('The grain folder needs permission again.')
+    await writeLocal(h, path, text)
+  } else {
+    await bridgeWrite(path, text)
+  }
+  const created = !s.entries.has(path)
+  if (created) {
+    const all = [...s.entries.values()].filter((e) => e.kind !== 'dir').map((e) => ({ path: e.path, size: e.size, kind: e.kind, blob: e.blob, meta: e.meta }))
+    all.push({ path, size: text.length, kind: 'file', blob: undefined, meta: undefined })
+    const entries = buildEntries(all)
+    repo.set({ entries, backlinks: backlinksOf(entries), version: s.version + 1 })
+  } else {
+    const e = s.entries.get(path)!
+    e.size = text.length
+    e.meta = undefined
+    repo.set({ version: s.version + 1 })
+  }
+  changes.set((c) => ({ list: [{ path, at: Date.now(), by, bytes: text.length, created }, ...c.list].slice(0, 300) }))
+}
+
+const blobUrls = new Map<string, string>()
+
+/** A URL an <img> or <audio> can load for a file in the active version. */
+export async function assetUrl(path: string): Promise<string> {
+  const s = repo.get()
+  if (s.origin.kind === 'github') {
+    if (/\.svg$/i.test(path)) return `https://cdn.jsdelivr.net/gh/${s.owner}/${s.repo}@${s.ref}/${path}`
+    return rawUrl(s.owner, s.repo, s.ref, path)
+  }
+  const key = `${refKey(s.origin)}:${path}`
+  const hit = blobUrls.get(key)
+  if (hit) return hit
+  let blob: Blob
+  if (s.origin.kind === 'local') {
+    const h = localHandle() ?? (await restoreLocalGrain(true))
+    if (!h) throw new Error('The grain folder needs permission again.')
+    blob = await readLocal(h, path)
+    if (/\.svg$/i.test(path)) blob = new Blob([await blob.text()], { type: 'image/svg+xml' })
+  } else {
+    blob = new Blob([await bridgeRead(path)], { type: /\.svg$/i.test(path) ? 'image/svg+xml' : 'application/octet-stream' })
+  }
+  const url = URL.createObjectURL(blob)
+  blobUrls.set(key, url)
+  return url
 }
 
 const isDir = (p: string) => repo.get().entries.get(p)?.kind === 'dir'
