@@ -25,10 +25,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Turn on GitHub Pages (first run only)
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      # Pages must be set to "Source: GitHub Actions" in Settings -> Pages first;
+      # the workflow token cannot create or reconfigure the Pages site itself.
+      - uses: actions/configure-pages@v5
       - run: npm ci
       - name: Snapshot grain (tree, stamps, headers, links)
         run: npm run data:almanac
