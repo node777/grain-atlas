@@ -31,3 +31,56 @@
   .fields-legend .faint { display: none; }
   .fields-mini { transform: scale(0.8); transform-origin: top right; }
 }
+
+/* ---------- the view's own controls: bubbles or map, and a fold of settings with the key */
+.fields-ctl { position: absolute; left: 16px; top: 16px; z-index: 7; display: grid; gap: 8px; justify-items: start; font-family: var(--sans); }
+.fields-ctl-bar { display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: var(--r3); }
+.fields-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--r2); background: color-mix(in srgb, var(--page) 60%, transparent); }
+.fields-seg button {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; background: none; color: var(--ink-2);
+  font: 500 13px var(--sans); padding: 4px 10px; border-radius: var(--r1); cursor: pointer; white-space: nowrap;
+  transition: color var(--respond) var(--ease), background-color var(--respond) var(--ease), border-color var(--respond) var(--ease);
+}
+.fields-seg button svg { fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linejoin: round; }
+.fields-seg button:hover { color: var(--ink); }
+.fields-seg button[aria-checked='true'] { background: var(--surface-2); border-color: var(--brass-dim); color: var(--gold); }
+:root[data-mode='stone'] .fields-seg button[aria-checked='true'] { color: var(--brass-dim); background: var(--page); }
+.fields-seg button:focus-visible, .fields-ctl-more:focus-visible, .fields-toggle button:focus-visible { outline: 1.5px solid var(--brass-dim); outline-offset: 1px; }
+.fields-ctl-more {
+  display: inline-grid; place-items: center; width: 30px; height: 28px; border-radius: var(--r2); cursor: pointer;
+  border: 1px solid transparent; background: none; color: var(--ink-2);
+}
+.fields-ctl-more svg { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; }
+.fields-ctl-more:hover, .fields-ctl-more[aria-expanded='true'] { color: var(--gold); border-color: var(--rule); }
+:root[data-mode='stone'] .fields-ctl-more:hover, :root[data-mode='stone'] .fields-ctl-more[aria-expanded='true'] { color: var(--brass-dim); }
+.fields-ctl-panel {
+  width: min(300px, calc(100vw - 32px)); padding: 10px 12px; display: grid; gap: 9px; font-size: 13px; color: var(--ink-surface);
+  max-height: calc(100vh - 190px); overflow: auto; animation: fields-fold-in var(--respond) var(--ease);
+}
+@keyframes fields-fold-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.fields-ctl-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.fields-ctl-row .fields-seg button { padding: 2px 8px; font-size: 12px; }
+.fields-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+.fields-toggle[aria-disabled] { opacity: .45; cursor: default; }
+.fields-toggle button {
+  flex: none; width: 30px; height: 17px; border-radius: 9px; border: 1px solid var(--rule); background: var(--page);
+  position: relative; padding: 0; cursor: pointer; transition: background-color var(--respond) var(--ease), border-color var(--respond) var(--ease);
+}
+.fields-toggle button:disabled { cursor: default; }
+.fields-toggle button i {
+  position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--ink-3);
+  transition: transform var(--respond) var(--ease), background-color var(--respond) var(--ease);
+}
+.fields-toggle button[aria-checked='true'] { border-color: var(--brass-dim); background: color-mix(in srgb, var(--brass) 22%, var(--page)); }
+.fields-toggle button[aria-checked='true'] i { transform: translateX(13px); background: var(--brass); }
+.fields-key { border-top: 1px solid var(--rule); padding-top: 6px; }
+.fields-key ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.fields-key li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); line-height: 1.25; }
+.fields-key li canvas { flex: none; }
+.fields-key b { color: var(--ink); font-weight: 600; }
+.fields-tip-kind { font-size: 11.5px; color: var(--ink-2); margin-top: 2px; }
+@media (max-width: 720px) {
+  .fields-ctl { left: 12px; top: 12px; }
+  .fields-ctl-bar > .fields-seg button { padding: 4px 8px; }
+  .fields-ctl-bar > .fields-seg button svg { display: none; }
+}

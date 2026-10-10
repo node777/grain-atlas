@@ -24,6 +24,16 @@ export interface Plot {
   children: Plot[]
   grains: Grain[]             // direct files, relative to plot centre
   region: Region
+  /** the disc the loose files are sown in (centre relative like x/y until absolutized; lr 0 if none) */
+  lx: number
+  ly: number
+  lr: number
+  /** map view: where the atlas sets this plot (most plots stay put; a basin's dated folders are
+   *  re-strung along their river), and its loose disc there. Unset until the atlas is built. */
+  mx?: number
+  my?: number
+  mlx?: number
+  mly?: number
 }
 
 export interface RegionLand {
@@ -131,6 +141,7 @@ function plotFor(entries: Map<string, Entry>, path: string, depth: number, regio
   return {
     path, name: e.name, x: 0, y: 0, r: Math.max(R, GRAIN * 1.6), files: e.files, depth,
     furrow: hash(path) * Math.PI, children, grains, region,
+    lx: loose ? loose.x : 0, ly: loose ? loose.y : 0, lr: loose ? looseR : 0,
   }
 }
 
@@ -159,7 +170,7 @@ export function layoutWorld(entries: Map<string, Entry>): World {
       const R = GRAIN * Math.sqrt(rootFiles.length) * 1.4
       byRegion.set('front', [{
         path: '', name: 'the root', x: 0, y: 0, r: R, files: rootFiles.length, depth: 0, furrow: 0.3,
-        children: [], grains: grainsFor(rootFiles, R), region: front,
+        children: [], grains: grainsFor(rootFiles, R), region: front, lx: 0, ly: 0, lr: R,
       }])
     }
     for (const c of root.children) {
@@ -217,6 +228,7 @@ export function layoutWorld(entries: Map<string, Entry>): World {
   const index = new Map<string, { x: number; y: number; r: number }>()
   const abs = (p: Plot, ox: number, oy: number) => {
     p.x += ox; p.y += oy
+    p.lx += p.x; p.ly += p.y
     index.set(p.path, { x: p.x, y: p.y, r: p.r })
     for (const g of p.grains) { g.x += p.x; g.y += p.y; index.set(g.path, { x: g.x, y: g.y, r: GRAIN }) }
     for (const c of p.children) abs(c, p.x, p.y)
