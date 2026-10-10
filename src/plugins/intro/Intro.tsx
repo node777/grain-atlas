@@ -210,6 +210,7 @@ export function Intro(_: ViewProps) {
           <button className="chip" onClick={() => enter()}>Wander the fields</button>
         </div>
         <p className="intro-note sans">The atlas may ask for your location once, to cast the sky where you are. Say no and it casts from Ujjain.</p>
+        <p className="intro-by">an atlas by DJINN</p>
       </div>
       {!done && <button className="ascii-btn intro-skip" onClick={() => setDone(true)}>[ skip ]</button>}
     </div>

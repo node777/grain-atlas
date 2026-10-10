@@ -154,3 +154,7 @@ Each row was cross-checked against at least two independent listings:
 - **Zi's Han determinative (φ¹ Ori)**: rests on Chinese Wikipedia snippets saying the old determinatives are now called 奎宿二, 觜宿二 and 参宿三.
 - **Pingree & Morrissey**: only the citation and secondary reports were seen, since the article is paywalled.
 - **Nakshatra symbols and the `essence` glosses**: the symbols follow common Jyotish usage, with alternatives given. The glosses are original wording.
+
+---
+
+<sub>Part of the Grain Atlas, an atlas by DJINN.</sub>

@@ -116,6 +116,7 @@ export function SettingsDrawer({ onClose }: { onClose: () => void }) {
           </p>
           <button className="chip" onClick={() => loadRepo()}>Read the tree again</button>
         </section>
+        <p className="drawer-by faint sans">Grain Atlas · Atlas by <b>DJINN</b></p>
       </div>
     </div>
   )

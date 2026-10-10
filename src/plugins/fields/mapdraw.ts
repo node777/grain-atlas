@@ -621,6 +621,9 @@ export class MapRenderer {
     ctx.font = fontAt('400 {s} Vollkorn, Georgia, serif', h * 0.11)
     ctx.globalAlpha = 0.75
     ctx.fillText(stats, cx, y + h * 0.84)
+    ctx.font = fontAt('italic {s} Vollkorn, Georgia, serif', h * 0.085)
+    ctx.globalAlpha = 0.5
+    ctx.fillText('surveyed by DJINN', cx, y + h + h * 0.16)
     ctx.restore()
   }
 

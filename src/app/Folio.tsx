@@ -16,7 +16,8 @@ import { roomWord } from '@/grain/header'
 import { toast } from '@/ui/Toast'
 import { runLine } from '@/plugins/bench/commands'
 import { Character } from '@/voices/Character'
-import { lookForName, voiceByName, activeVoice } from '@/voices/voices'
+import { lookForName, voiceByName, activeVoice, voiceById } from '@/voices/voices'
+import { askCompanion } from '@/voices/companion'
 
 /** The voice a page is written in, with its face; click to wake that voice in the dock. */
 function VoiceTag({ name }: { name: string }) {
@@ -56,6 +57,7 @@ export function Folio({ path, route }: { path: string; route: Route }) {
           })}
         </nav>
         <span style={{ flex: 1 }} />
+        <AskButton path={path} isDir={entry?.kind === 'dir'} />
         {entry && r.owner && (
           <a className="ascii-btn" href={webUrl(r.owner, r.repo, r.ref, path, entry.kind === 'dir')} target="_blank" rel="noreferrer">[ on github ]</a>
         )}
@@ -199,4 +201,17 @@ export function formatSize(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+/** Ask the companion about this page: it comes out of the header with a question ready. */
+function AskButton({ path, isDir }: { path: string; isDir: boolean }) {
+  const voice = voiceById(useStore(activeVoice, (s) => s.id))
+  const name = path.split('/').pop() || 'grain'
+  return (
+    <button className="ascii-btn ask-btn" title={`Ask ${voice.name} about ${name}`} onClick={() => askCompanion(isDir
+      ? `What is the ${path || 'root'} folder for, and where should I start reading in it?`
+      : `Explain ${path} in plain words: what it is for, where it sits in grain, and what to read next.`)}>
+      [ ask {voice.name} ]
+    </button>
+  )
 }

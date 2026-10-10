@@ -57,3 +57,7 @@ Rio 3, Quin, Riyo, Kyri." That is why the current telling is called "Kyri 6".
 - **Every voice has a face** drawn from simple shapes. Tone words set the eyes, lids, brows, mouth,
   cheeks and liveliness; the element row sets the colour; head and crown are chosen per voice.
   The code is in `src/voices/`.
+
+---
+
+<sub>Part of the Grain Atlas, an atlas by DJINN.</sub>

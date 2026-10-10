@@ -8,6 +8,7 @@ import { PLUGINS } from '@/plugins'
 import { Shell } from '@/app/Shell'
 
 registerPlugins(PLUGINS)
+console.info('%cGrain Atlas%c  an atlas of grain, by DJINN', 'font: italic 16px Vollkorn, Georgia, serif; color: #d9b45a', 'font: 12px sans-serif; color: #b4a892')
 applyTheme(settings.get())
 if (settings.get().introSeen) settlePlaceOnce()
 loadRepo()

@@ -79,8 +79,8 @@ export function FieldsControls({ C, stone }: { C: Record<string, string>; stone:
     <div className="fields-ctl" ref={panelRef}>
       <div className="fields-ctl-bar panel linen-fine">
         <Seg label="View" value={p.view} onChange={(view) => set({ view })} options={[
-          ['bubbles', 'Bubbles', <svg key="b" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="5" cy="8" r="4" /><circle cx="10.5" cy="4.5" r="2.6" /><circle cx="11" cy="11" r="1.8" /></svg>],
           ['map', 'Map', <svg key="m" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M1 12 L5 4 L7.5 8 L9.5 5.5 L13 12 Z" /><path d="M4.3 5.4 L5 4 L5.8 5.3" /></svg>],
+          ['bubbles', 'Bubbles', <svg key="b" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="5" cy="8" r="4" /><circle cx="10.5" cy="4.5" r="2.6" /><circle cx="11" cy="11" r="1.8" /></svg>],
         ]} />
         <button type="button" className="fields-ctl-more" aria-expanded={open} aria-label="Field settings" title="Field settings"
           onClick={() => setOpen((o) => !o)}>

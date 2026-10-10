@@ -244,3 +244,7 @@ Everything below is direction, not promise.
 Next: Rishi in the page (the Bench plan), commits and PRs from the Floor for GitHub versions
 (token-authenticated), contributor nativities from public commit times, and the Linengrow palette
 seats drawn as themes.
+
+---
+
+<sub>Part of the Grain Atlas, an atlas by DJINN.</sub>
