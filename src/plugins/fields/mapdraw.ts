@@ -6,8 +6,9 @@
 //
 // Level of detail is by size on screen. A file plot narrower than a few pixels is a dot of its
 // land-use tint and each settlement wears a town sign; wider, each file is its simple mark; wider
-// still, its full drawing. Relief is sampled on world-anchored jittered grids, two octaves at a
-// time chosen by zoom, so peaks stay put while finer ones fill in as you come closer.
+// still, its full drawing. Relief is sampled on world-anchored jittered grids chosen by zoom,
+// peaks and hills on wide ones and woods on finer ones, so what is there stays put while finer
+// marks fill in as you come closer. Every mark is copied from a pre-drawn sprite (sprites.ts).
 
 import type { CanvasApi } from '@/ui/useCanvas'
 import { journeyById } from '@/grain/quests'
@@ -388,7 +389,7 @@ export class MapRenderer {
               const rr = S * (fine ? 0.27 + 0.1 * h3 : 0.2 + 0.06 * h3)
               if (gr.clear < rr * 0.9) continue
               items.push({ y: Y(wy), x: X(wx), t: 3, m: rr * px, h: h3, r: 0 })
-            } else if (fine && nz < 0.3 && h3 < 0.1) {
+            } else if (fine && nz < 0.34 && h3 < 0.15) {
               items.push({ y: Y(wy), x: X(wx), t: 4, m: S * 0.26 * px, h: h3, r: 0 })
             }
           }

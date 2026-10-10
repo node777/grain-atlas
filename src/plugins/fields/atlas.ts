@@ -198,6 +198,7 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
   }
   const riverPlots = new Set(plots.filter(isRiver))
   const flow = new Map<Plot, [number, number]>()           // a river town's downstream bearing
+  const slot = new Map<Plot, number>()                     // and, in a basin, the length of its stretch
   const basins: Array<{ plot: Plot; order: Plot[] }> = []
 
   // basins: re-string their dated folders along a serpentine that walks toward the coast
@@ -210,10 +211,11 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
     const ul = Math.hypot(ux, uy) || 1
     ux /= ul; uy /= ul
     const vx = -uy, vy = ux
-    const items = [...B.children].sort((a, b) => a.name.localeCompare(b.name))
-    const re = items.map((c) => Math.max(CELL * 1.6, c.r * 0.8))
+    // the basin's own loose files (an index, a README) stand at the source as the first town
+    const items: Array<Plot | null> = [...(B.lr > 0 && B.grains.length ? [null] : []), ...[...B.children].sort((a, b) => a.name.localeCompare(b.name))]
+    const re = items.map((c) => Math.max(CELL * 1.6, (c ? c.r : B.lr) * 0.8))
     const Rb = B.r * 0.9
-    const placed: Array<{ p: Plot; a: number; b: number; dir: number }> = []
+    const placed: Array<{ p: Plot | null; a: number; b: number; dir: number }> = []
     let a = -Rb, i = 0, dir = 1
     while (i < items.length) {
       let h = 2 * re[i]
@@ -239,10 +241,12 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
     for (const it of placed) {
       const nx = mx(B) + ux * (it.a - shift) + vx * it.b
       const ny = my(B) + uy * (it.a - shift) + vy * it.b
+      if (!it.p) { B.mlx = nx; B.mly = ny; continue }
       translate(it.p, nx - mx(it.p), ny - my(it.p))
       flow.set(it.p, [vx * it.dir, vy * it.dir])
+      slot.set(it.p, 2 * re[items.indexOf(it.p)] * 1.04)
     }
-    basins.push({ plot: B, order: placed.map((q) => q.p).filter((p) => riverPlots.has(p)) })
+    basins.push({ plot: B, order: placed.map((q) => q.p).filter((p): p is Plot => !!p && riverPlots.has(p)) })
   }
 
   // ---- files
@@ -274,7 +278,8 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
       const n = files.length
       const f = flow.get(p) ?? [Math.cos(p.furrow), Math.sin(p.furrow)]
       const ux = f[0], uy = f[1], vx = -uy, vy = ux
-      const L = Math.max(R * 1.75, CELL * 4)
+      // a day in a basin keeps to its own stretch, so the river never doubles back between days
+      const L = Math.min(Math.max(R * 1.75, CELL * 4), (slot.get(p) ?? Infinity) * 0.92)
       const A = R * 0.14, ph = hash(p.path + ':m') * Math.PI * 2, fq = hash(p.path + ':f') > 0.5 ? 1.5 : 1
       const M = 28
       const line: number[] = []
@@ -291,15 +296,15 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
       const cap = Math.max(1, Math.floor(S / CELL))
       const rows = Math.max(1, Math.ceil(n / (2 * cap)))
       const stations = Math.ceil(n / (2 * rows))
+      // banks are set off square to the river's general course, not its every wiggle, so rows
+      // of houses stay parallel through the bends
       const at = (dist: number): [number, number, number, number] => {
         let s = 1
         while (s < M && arc[s] < dist) s++
         const u = (dist - arc[s - 1]) / Math.max(1e-6, arc[s] - arc[s - 1])
         const x = line[s * 2 - 2] + (line[s * 2] - line[s * 2 - 2]) * u
         const y = line[s * 2 - 1] + (line[s * 2 + 1] - line[s * 2 - 1]) * u
-        const tx = line[s * 2] - line[s * 2 - 2], ty = line[s * 2 + 1] - line[s * 2 - 1]
-        const tl = Math.hypot(tx, ty) || 1
-        return [x, y, -ty / tl, tx / tl]
+        return [x, y, vx, vy]
       }
       files.forEach((file, i) => {
         const st = Math.floor(i / (2 * rows)), q = i % (2 * rows)
@@ -326,39 +331,49 @@ export function buildAtlas(world: World, entries: Map<string, Entry>): Atlas {
     const N = Math.ceil((1.7 * R) / CELL) + 2
     const ph1 = hash(p.path + ':1') * 6.283, ph2 = hash(p.path + ':2') * 6.283, ph3 = hash(p.path + ':3') * 6.283
     const streetI = Math.floor(hash(p.path + ':s') * 5)
-    const cand: Array<{ x: number; y: number; key: number; street: boolean; h: number }> = []
+    const cand: Array<{ x: number; y: number; key: number; street: boolean; h: number; d: number }> = []
     for (let i = -N; i <= N; i++) for (let j = -N; j <= N; j++) {
       const lx = i * CELL, ly = j * CELL
       const d = Math.hypot(lx, ly)
       if (d > 1.7 * R) continue
       const ang = Math.atan2(ly, lx)
-      const wob = 0.2 * Math.sin(3 * ang + ph1) + 0.13 * Math.sin(5 * ang + ph2) + 0.1 * Math.sin(2 * ang + ph3)
+      const wob = 0.12 * Math.sin(3 * ang + ph1) + 0.08 * Math.sin(5 * ang + ph2) + 0.06 * Math.sin(2 * ang + ph3)
       const h = hash(`${p.path}#${i},${j}`)
       cand.push({
         x: cx + lx * c - ly * s, y: cy + lx * s + ly * c,
-        key: d / (1 + wob) + (h - 0.5) * CELL * 1.3,
-        street: ((j % 3) + 3) % 3 === 2 || ((i + streetI) % 5 + 5) % 5 === 4,
-        h,
+        key: d / (1 + wob) + (h - 0.5) * CELL * 1.1 * Math.min(1, files.length / 12),
+        // streets cross the town's core; its outskirts are built plot to plot
+        street: d < R * 0.6 && (((j % 3) + 3) % 3 === 2 || ((i + streetI) % 5 + 5) % 5 === 4),
+        h, d,
       })
     }
+    // keep within the folder's own ground, reaching further only if it is too small to hold them
+    cand.sort((a, b) => a.d - b.d)
+    // (half a plot in from the rim, as neighbouring folders' rims touch)
+    const reach = Math.max(R - CELL * 0.5, cand[Math.min(cand.length - 1, Math.ceil(files.length * 1.2))].d)
+    for (let q = cand.length - 1; q >= 0 && cand[q].d > reach; q--) cand.pop()
     cand.sort((a, b) => a.key - b.key)
     const used = new Uint8Array(cand.length)
     let tp = 0, townKey = -Infinity
     let sx = 0, sy = 0, far = 0
+    let anyp = 0
     for (const file of files) {
       let ci = -1
       if (BUILT[file.k]) {
         while (tp < cand.length && (used[tp] || cand[tp].street)) tp++
         ci = tp < cand.length ? tp : -1
         if (ci >= 0) townKey = cand[ci].key
-      }
-      if (ci < 0) {
+      } else {
         for (let q = 0; q < cand.length; q++) {
           if (used[q] || (cand[q].street && cand[q].key <= townKey)) continue
           ci = q; break
         }
       }
-      if (ci < 0) ci = 0
+      // out of the cells it would choose: the nearest free one of any sort
+      if (ci < 0) {
+        while (anyp < cand.length && used[anyp]) anyp++
+        ci = anyp
+      }
       used[ci] = 1
       const C = cand[ci]
       const h = hash(file.path)

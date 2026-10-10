@@ -148,32 +148,33 @@ function forge(g: CanvasRenderingContext2D, x: number, y: number, s: number, h: 
 }
 
 function mill(g: CanvasRenderingContext2D, x: number, y: number, s: number, h: number, I: Ink) {
-  // a tower mill: a tapering tower, its cap, and four sails set as an X
-  const base = y + s * 0.32, top = y - s * 0.1
-  g.beginPath()
-  g.moveTo(x - s * 0.17, base); g.lineTo(x - s * 0.11, top); g.lineTo(x + s * 0.11, top); g.lineTo(x + s * 0.17, base); g.closePath()
-  g.fillStyle = I.land; g.fill(); g.stroke()
-  g.beginPath()
-  g.moveTo(x - s * 0.14, top); g.quadraticCurveTo(x, top - s * 0.2, x + s * 0.14, top); g.closePath()
-  g.fillStyle = I.roof2; g.fill(); g.stroke()
-  const hx = x, hy = top - s * 0.04, L = s * 0.36, a0 = Math.PI / 4 + (h - 0.5) * 0.5
+  // a tower mill: a stout dyed tower under a pale cap, four short sails set as an X above it
+  const base = y + s * 0.32, top = y - s * 0.06
+  const hx = x, hy = top - s * 0.06, L = s * 0.27, a0 = Math.PI / 4 + (h - 0.5) * 0.5
+  const ga = g.globalAlpha
+  g.globalAlpha = ga * 0.75
   for (let i = 0; i < 4; i++) {
     const a = a0 + (i * Math.PI) / 2
     const c = Math.cos(a), sn = Math.sin(a), nx = -sn, ny = c
-    if (s > 11) {
-      // a lattice blade beside the stock
-      const w = s * 0.07
-      g.beginPath()
-      g.moveTo(hx + c * L * 0.3, hy + sn * L * 0.3)
-      g.lineTo(hx + c * L, hy + sn * L)
-      g.lineTo(hx + c * L + nx * w, hy + sn * L + ny * w)
-      g.lineTo(hx + c * L * 0.3 + nx * w, hy + sn * L * 0.3 + ny * w)
-      g.closePath()
-      g.fillStyle = I.land; g.fill(); g.stroke()
-    }
-    g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx + c * L, hy + sn * L); g.stroke()
+    const w = Math.max(0.8, s * 0.06)
+    g.beginPath()
+    g.moveTo(hx + c * L * 0.25, hy + sn * L * 0.25)
+    g.lineTo(hx + c * L, hy + sn * L)
+    g.lineTo(hx + c * L + nx * w, hy + sn * L + ny * w)
+    g.lineTo(hx + c * L * 0.25 + nx * w, hy + sn * L * 0.25 + ny * w)
+    g.closePath()
+    g.fillStyle = I.land; g.fill(); g.stroke()
   }
-  g.beginPath(); g.arc(hx, hy, Math.max(0.8, s * 0.035), 0, Math.PI * 2); g.fillStyle = I.ink; g.fill()
+  g.globalAlpha = ga
+  g.beginPath()
+  g.moveTo(x - s * 0.2, base); g.lineTo(x - s * 0.13, top); g.lineTo(x + s * 0.13, top); g.lineTo(x + s * 0.2, base); g.closePath()
+  g.fillStyle = I.roof2; g.fill(); g.stroke()
+  g.beginPath()
+  g.moveTo(x - s * 0.15, top); g.quadraticCurveTo(x, top - s * 0.17, x + s * 0.15, top); g.closePath()
+  g.fillStyle = I.land; g.fill(); g.stroke()
+  if (s > 12) {
+    g.beginPath(); g.rect(x - s * 0.035, base - s * 0.14, s * 0.07, s * 0.14); g.fillStyle = I.land; g.fill(); g.stroke()
+  }
 }
 
 function field(g: CanvasRenderingContext2D, x: number, y: number, s: number, h: number, rot: number, I: Ink) {
