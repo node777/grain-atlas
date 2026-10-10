@@ -81,15 +81,66 @@ export interface Proj {
   fwd: V3
 }
 
-export function makeProj(cam: Cam, w: number, h: number): Proj {
+/** The part of the canvas the sky is framed in (the rest may sit under a panel). */
+export interface ViewRect { x: number; y: number; w: number; h: number }
+
+export function makeProj(cam: Cam, w: number, h: number, view?: ViewRect, centre?: [number, number]): Proj {
   const fwd = norm(cam.fwd)
   let right = cross(fwd, cam.up)
   if (Math.hypot(...right) < 1e-6) right = cross(fwd, [0, 0, 1])
   right = norm(right)
   const up = norm(cross(right, fwd))
-  const half = Math.min(w, h) / 2
+  const v = view ?? { x: 0, y: 0, w, h }
+  const half = Math.min(v.w, v.h) / 2
   const scale = half / (2 * Math.tan(((cam.fov / 2) * Math.PI) / 180 / 2))
-  return { w, h, cx: w / 2, cy: h / 2, scale, right, up, fwd }
+  const c = centre ?? [v.x + v.w / 2, v.y + v.h / 2]
+  return { w, h, cx: c[0], cy: c[1], scale, right, up, fwd }
+}
+
+/** The field (degrees across the view's shorter side) that gives a projection scale. */
+export const fovForScale = (half: number, scale: number) => (4 * Math.atan(half / (2 * scale)) * 180) / Math.PI
+
+/**
+ * Rows of [right; up; fwd] x M, so a vector in M's source frame goes straight to camera space
+ * with nine multiplies: the hot loops (stars, Milky Way) use this instead of mul + project.
+ */
+export function composite(p: Proj, m: M3, out: Float64Array): Float64Array {
+  const rows = [p.right, p.up, p.fwd]
+  for (let r = 0; r < 3; r++) {
+    const b = rows[r]
+    for (let j = 0; j < 3; j++) out[r * 3 + j] = b[0] * m[0][j] + b[1] * m[1][j] + b[2] * m[2][j]
+  }
+  return out
+}
+
+/** Horizontal unit vector for an hour angle H (west positive) and declination, at latitude lat. */
+export function hdVec(hDeg: number, decDeg: number, latDeg: number): V3 {
+  const H = (hDeg * Math.PI) / 180, d = (decDeg * Math.PI) / 180, f = (latDeg * Math.PI) / 180
+  return [
+    Math.cos(f) * Math.sin(d) - Math.sin(f) * Math.cos(d) * Math.cos(H),
+    Math.cos(d) * Math.sin(H),
+    Math.sin(f) * Math.sin(d) + Math.cos(f) * Math.cos(d) * Math.cos(H),
+  ]
+}
+
+/** Local magnification of the projection at a point: pixels per radian of sky. */
+export const pxPerRad = (p: Proj, v: V3) => (p.scale * 2) / (1 + dot(v, p.fwd))
+
+/**
+ * The screen circle a small circle of the sphere projects to (stereographic projection keeps
+ * circles circles), fitted through three of its points; null when it is a line or runs behind.
+ */
+export function circleFit(p: Proj, axis: V3, radiusDeg: number): { x: number; y: number; r: number } | null {
+  const pts = circlePoints(axis, radiusDeg, 3)
+  const a = project(p, pts[0], -0.995), b = project(p, pts[1], -0.995), c = project(p, pts[2], -0.995)
+  if (!a || !b || !c) return null
+  const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]))
+  if (Math.abs(d) < 1e-6) return null
+  const a2 = a[0] ** 2 + a[1] ** 2, b2 = b[0] ** 2 + b[1] ** 2, c2 = c[0] ** 2 + c[1] ** 2
+  const x = (a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d
+  const y = (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d
+  const r = Math.hypot(a[0] - x, a[1] - y)
+  return isFinite(r) && r < 1e6 ? { x, y, r } : null
 }
 
 /** Screen point for a unit vector, or null when it falls too far behind the camera. */
