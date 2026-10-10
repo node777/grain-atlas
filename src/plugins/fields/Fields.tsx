@@ -25,6 +25,9 @@ import { MapRenderer, pickGlyph, markOf } from './mapdraw'
 import { FieldsControls } from './Controls'
 import './fields.css'
 
+/** How far out the map zooms: a little beyond the whole land at a glance, never smaller. */
+const MIN_OF_FIT = 0.7
+
 interface Pick { plot?: Plot; grain?: Grain; regionName?: string; glyph?: number }
 
 let treeCount = 0
@@ -181,8 +184,9 @@ export function Fields({ route }: ViewProps) {
     a.flyTo(to, ms)
   }
 
+  const fitKRef = useRef(0)
   const { ref, api } = useCanvas({
-    minK: 0.02,
+    minK: () => Math.max(0.02, fitKRef.current * MIN_OF_FIT),
     maxK: 30,
     // keep drawing only while the hover ring is still spreading
     get animate() { return hoverPlot.current !== null && !prefersStill() && performance.now() - pulseT0.current < PULSE_MS + 40 },
@@ -246,6 +250,7 @@ export function Fields({ route }: ViewProps) {
       k: Math.min((s.w - 480) / (b.x1 - b.x0), (s.h - 140) / (b.y1 - b.y0), (Math.min(s.w, s.h) * 1.1) / world.radius),
     }
     if (fit.k <= 0) fit.k = (Math.min(s.w, s.h) * 0.5) / world.radius
+    fitKRef.current = fit.k
     if (!fitted.current) {
       api.camera.current = { ...fit, k: fit.k * 0.6 }
       api.flyTo(fit, 1000)
@@ -287,7 +292,7 @@ export function Fields({ route }: ViewProps) {
       t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || (enter && /^(BUTTON|A|SUMMARY)$/.test(t.tagName)))
     const zoomBy = (f: number) => {
       const c = api.camera.current
-      api.flyTo({ x: c.x, y: c.y, k: Math.max(0.02, Math.min(30, c.k * f)) }, 240)
+      api.flyTo({ x: c.x, y: c.y, k: Math.max(fitKRef.current * MIN_OF_FIT, Math.min(30, c.k * f)) }, 240)
     }
     const centrePlot = (): Plot | undefined => {
       const s = api.size.current

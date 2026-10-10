@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useRoute, hrefFor, navigate } from '@/core/router'
 import { allViews, findView } from '@/core/registry'
 import { useStore } from '@/core/store'
-import { settings, applyTheme } from '@/core/settings'
+import { settings } from '@/core/settings'
 import { repo } from '@/grain/repo'
 import { Compass } from './Compass'
 import { NowChip } from './NowChip'
@@ -27,7 +27,6 @@ export function Shell() {
   const [drawer, setDrawer] = useState(false)
   const [versions, setVersions] = useState(false)
 
-  useEffect(() => applyTheme(s), [s.mode, s.element, s.motion])
   useEffect(() => startExploreClock(() => {
     const v = voiceById(activeVoice.get().id)
     return `Hello! I'm ${v.name}. Ask me about anything you're looking at -- or tuck me back into the header.`

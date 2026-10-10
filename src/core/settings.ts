@@ -75,6 +75,15 @@ export function settlePlaceOnce(): void {
   )
 }
 
+// The theme lives on <html>, and it must change inside settings.set, before anything re-renders.
+// Canvases read their colours from CSS variables in their own effects, and React runs a child's
+// effects before its parent's: a theme applied from the Shell's effect arrived after the map and
+// the sky had already redrawn in the old colours, and every toggle showed the theme before.
+if (typeof document !== 'undefined') {
+  applyTheme(settings.get())
+  settings.subscribe(() => applyTheme(settings.get()))
+}
+
 export function applyTheme(s: Settings): void {
   const root = document.documentElement
   root.dataset.mode = s.mode
