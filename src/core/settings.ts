@@ -27,7 +27,7 @@ export interface Settings {
   introSeen: boolean
 }
 
-export const DEFAULT_REPO = { owner: 'grain-ww', repo: 'grain', branch: 'main' }
+export const DEFAULT_REPO = { owner: 'xykj61', repo: '20260618-grain', branch: 'main' }
 
 export const settings = createStore<Settings>(
   {

@@ -6,7 +6,7 @@
 
 An atlas, star chart and workbench for the [grain](https://github.com/grain-ww/grain) monorepo,
 built as a static site. It reads grain live from GitHub, or from your own checkout. It works with
-grain's voices on the **Threshing Floor**, and shows the tree seven ways:
+grain's voices on the **Threshing Floor**, and shows the tree eight ways:
 - **Fields** -- the tree as land, one grain per file: a bubble map, or an old atlas where pages are houses gathered into towns, dated folders run as rivers, and deep nesting rises into mountains (press M to switch).
 - **Ledger** -- folders and files, sorted and searchable.
 - **Heavens** -- grain's history as a sky.
@@ -20,9 +20,14 @@ grain's voices on the **Threshing Floor**, and shows the tree seven ways:
   - review drafts;
   - watch spend against the Gauge.
 
+- **Terrarium** -- a fish tank drawn in text, with a small ecosystem: feed it, drag things about, add
+  creatures and scenery, and keep it (or let it forget). Two objects in the glass open
+  [grain-www](https://node777.github.io/grain-www/) and the Terrarium.app download. See [`docs/TERRARIUM.md`](docs/TERRARIUM.md).
+
 The current voice also lives in the dock at the corner of every view. See [`docs/ADE.md`](docs/ADE.md).
 
-**Versions.** The atlas names the version you are reading the way grain does. The public seed is
+**Versions.** The atlas opens on [xykj61/20260618-grain](https://github.com/xykj61/20260618-grain), the living tree.
+It names the version you are reading the way grain does. The public seed is
 "incense", after its root commit subject; `grain-os/grain` is a pointer to it. You can switch to any
 fork, open a grain folder on your own computer (Chromium browsers), or connect through the bridge.
 See [`docs/research/versions.md`](docs/research/versions.md).
