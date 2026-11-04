@@ -31,6 +31,7 @@ prose, session logs, witnesses) here.
 
 - `src/core/` -- store (`createStore`/`useStore`; selectors are shallow-cached), settings, hash router, plugin registry
 - `src/plugins/<feature>/` -- every view and renderer is a plugin; register in `src/plugins/index.ts`
+- `src/plugins/terrarium/` -- the Grain Terrarium: `engine.ts` (pure ecosystem, seeded and tested), `art.ts` (sprites), `render.ts` (world to character grid), `links.ts` (the two doors' URLs)
 - `src/astro/` -- engine; `src/astro/data/` reference tables (sources and disagreements in `docs/research/astrology-sources.md`)
 - `src/grain/` -- repo model and loading order, one-clock stamps + clock seasons, header/link parser, regions (after MAP.md), journeys
 - `src/sources/` -- which grain is read: GitHub, a local folder (File System Access), or the bridge; `versions.ts` names a version grain's way

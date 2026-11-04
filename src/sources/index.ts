@@ -1,8 +1,9 @@
-// Which grain the atlas is reading: a repository on GitHub (grain-ww/grain, grain-os/grain, a
+// Which grain the atlas is reading: a repository on GitHub (xykj61/20260618-grain, grain-ww/grain, a
 // fork), a folder on your own disk, or a checkout reached through the bridge. Each one is a
 // version of grain, and each version carries a name read from the tree itself (see versions.ts).
 
 import { createStore } from '@/core/store'
+import { DEFAULT_REPO } from '@/core/settings'
 
 export type SourceRef =
   | { kind: 'github'; owner: string; repo: string; branch: string }
@@ -13,6 +14,7 @@ export interface KnownRemote { owner: string; repo: string; branch: string; note
 
 /** The grains named in grain's own pages. grain-os/grain is a pointer to the public seed. */
 export const KNOWN_REMOTES: KnownRemote[] = [
+  { owner: 'xykj61', repo: '20260618-grain', branch: 'main', note: 'the living tree, where the Terrarium is being planned' },
   { owner: 'grain-ww', repo: 'grain', branch: 'main', note: 'the public seed, sown from the maintainer\'s field' },
   { owner: 'grain-os', repo: 'grain', branch: 'main', note: 'the template home; today a pointer to grain-ww/grain' },
 ]
@@ -23,7 +25,7 @@ export interface SourcesState {
 }
 
 export const sources = createStore<SourcesState>({
-  active: { kind: 'github', owner: 'grain-ww', repo: 'grain', branch: 'main' },
+  active: { kind: 'github', owner: DEFAULT_REPO.owner, repo: DEFAULT_REPO.repo, branch: DEFAULT_REPO.branch },
   recent: [],
 }, 'grain-atlas:sources')
 

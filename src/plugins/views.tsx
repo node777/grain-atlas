@@ -12,6 +12,8 @@ import type { ViewProps } from '@/core/registry'
 const FloorLazy = lazy(() => import('./floor/Floor').then((m) => ({ default: m.Floor })))
 const Floor = (p: ViewProps) => <Suspense fallback={<div className="empty">Sweeping the threshing floor…</div>}><FloorLazy {...p} /></Suspense>
 import { navigate } from '@/core/router'
+const TerrariumLazy = lazy(() => import('./terrarium/Terrarium').then((m) => ({ default: m.Terrarium })))
+const Terrarium = (p: ViewProps) => <Suspense fallback={<div className="empty">Filling the tank…</div>}><TerrariumLazy {...p} /></Suspense>
 
 export const fieldsPlugin: AtlasPlugin = {
   id: 'fields', title: 'Fields', description: 'The freeform map: regions, rooms, folders and files as land.',
@@ -47,4 +49,10 @@ export const introPlugin: AtlasPlugin = {
 export const floorPlugin: AtlasPlugin = {
   id: 'floor', title: 'Threshing Floor', description: 'Work grain with its voices: talk, sow, sheaves, drafts, the Gauge.',
   views: [{ id: 'floor', title: 'Floor', hint: 'work grain with its voices', kind: 'tool', glyph: '⚘', order: 6, component: Floor }],
+}
+
+export const terrariumPlugin: AtlasPlugin = {
+  id: 'terrarium', title: 'Grain Terrarium', description: 'A fish tank drawn in text: feed it, move things, add things.',
+  views: [{ id: 'terrarium', title: 'Terrarium', hint: 'a tank of text fish under glass', kind: 'tool', glyph: '≈', order: 7, component: Terrarium }],
+  commands: [{ id: 'go-terrarium', title: 'Open the terrarium', keywords: 'fish tank aquarium ascii', run: () => navigate('terrarium') }],
 }
