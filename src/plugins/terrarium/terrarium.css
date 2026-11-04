@@ -22,7 +22,9 @@
 @media (max-width: 720px) {
   .terrarium { padding: 6px 8px 0; }
   .tank-bar { padding: 8px 8px 100px; }
-  .tank-tray { left: 8px; right: 8px; }
+  .tank-tray { left: 8px; right: 8px; max-height: 30vh; padding: 8px; gap: 6px; }
+  .tank-tray .chip { padding: 2px 8px; font-size: 12px; }
+  .tray-group > .faint { min-width: 0; width: 100%; }
   .tank-title p { font-size: 11.5px; }
   .tank-doors { display: none; }
 }

@@ -144,6 +144,8 @@ export function createWorld(W: number, H: number, seed = 20261104): World {
 }
 
 export const floorTop = (w: World) => w.H - FLOOR_UNITS
+/** Where the bottle rides: just under the surface, or lower on a narrow glass where the title takes the top. */
+const floatY = (w: World) => (w.W < 80 ? 26 : 10)
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 const rand = (w: World, a: number, b: number) => a + (b - a) * w.rng()
 
@@ -201,7 +203,7 @@ export function addDecor(w: World, d: DecorId, x?: number, y?: number): Decor | 
   if (w.decor.filter((e) => e.d === d).length >= spec.max) return null
   const e: Decor = {
     id: w.nextId++, kind: 'decor', d, x: clamp(x ?? rand(w, 8, Math.max(9, w.W - 8)), 3, w.W - 3),
-    y: spec.floats ? 10 : floorTop(w), h: d === 'kelp' ? 4 + Math.floor(w.rng() * 6) : 0, seed: w.rng() * 100, vy: 0, grabbed: false,
+    y: spec.floats ? floatY(w) : floorTop(w), h: d === 'kelp' ? 4 + Math.floor(w.rng() * 6) : 0, seed: w.rng() * 100, vy: 0, grabbed: false,
   }
   if (y !== undefined && !spec.floats && d !== 'pill') e.y = y
   if (d === 'pill') e.y = y ?? 3
@@ -239,7 +241,7 @@ export function resize(w: World, W: number, H: number): void {
   if (W === w.W && H === w.H) return
   const sx = W / w.W, sy = H / w.H
   w.creatures.forEach((c) => { c.x *= sx; c.y *= sy })
-  w.decor.forEach((d) => { d.x *= sx; d.y = DECOR[d.d].floats ? Math.min(d.y, H - 12) : d.d === 'pill' ? d.y * sy : H - FLOOR_UNITS })
+  w.decor.forEach((d) => { d.x *= sx; d.y = DECOR[d.d].floats ? d.y : d.d === 'pill' ? d.y * sy : H - FLOOR_UNITS })
   w.food.forEach((f) => { f.x *= sx; f.y *= sy })
   w.bubbles.forEach((b) => { b.x *= sx; b.y *= sy })
   w.W = W; w.H = H
@@ -435,7 +437,7 @@ export function step(w: World, dtRaw: number): void {
     if (d.d === 'vent' && w.rng() < dt * 2.2) w.bubbles.push({ x: d.x + (w.rng() - 0.5), y: d.y - 2, vy: -7 - w.rng() * 3, ph: w.rng() * 6 })
     if (d.grabbed) continue
     if (spec.floats) {
-      d.y = 10 + Math.sin(w.t * 0.9 + d.seed) * 0.9
+      d.y = floatY(w) + Math.sin(w.t * 0.9 + d.seed) * 0.9
       d.x = clamp(d.x + Math.sin(w.t * 0.13 + d.seed) * 0.5 * dt, 6, w.W - 6)
     } else if (d.d === 'pill') {
       d.y = Math.min(w.H * 0.5, d.y + 2.5 * dt)
