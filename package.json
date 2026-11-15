@@ -24,10 +24,13 @@
   "homepage": "https://github.com/node777/grain-atlas#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
+    "@fontsource/jacquard-24": "^5.3.0",
     "@fontsource/public-sans": "^5.1.1",
     "@fontsource/source-code-pro": "^5.1.1",
     "@fontsource/tiro-devanagari-sanskrit": "^5.1.0",
     "@fontsource/vollkorn": "^5.1.1",
+    "@fontsource/vt323": "^5.3.0",
+    "@fontsource/xanh-mono": "^5.3.0",
     "astronomy-engine": "^2.1.19",
     "dompurify": "^3.2.4",
     "highlight.js": "^11.11.1",

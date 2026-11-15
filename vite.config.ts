@@ -8,6 +8,16 @@ export default defineConfig({
   base: process.env.ATLAS_BASE ?? './',
   plugins: [react()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  build: { target: 'es2022', chunkSizeWarningLimit: 1200 },
+  build: {
+    target: 'es2022',
+    chunkSizeWarningLimit: 1200,
+    // two pages: the atlas, and the grain.school brand book at /brand/
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        brand: fileURLToPath(new URL('./brand/index.html', import.meta.url)),
+      },
+    },
+  },
   test: { environment: 'node' },
 })
